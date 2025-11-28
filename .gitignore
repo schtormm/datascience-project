@@ -1,4 +1,7 @@
 Include
 Lib
 Scripts
-pyenv.cfg
+
+# no environmen files
+*.env
+*.cfg
