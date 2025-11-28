@@ -1,6 +1,7 @@
 Include
 Lib
 Scripts
+share
 
 # no environmen files
 *.env
