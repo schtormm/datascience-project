@@ -4,4 +4,4 @@ Scripts
 
 # no environmen files
 *.env
-*.cfg
+pyvenv.cfg
