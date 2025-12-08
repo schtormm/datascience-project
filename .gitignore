@@ -6,3 +6,7 @@ share
 # no environmen files
 *.env
 pyvenv.cfg
+
+# ignore evaluation metric files, as these are generated
+evaluation_metrics.csv
+evaluation_metrics_cross.csv

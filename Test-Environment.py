@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 from scipy import stats
+from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error, root_mean_squared_error
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.graphics.tsaplots import plot_predict
 
@@ -44,8 +45,60 @@ def create_models(country_dfs, model, arima_order = None):
 
     return country_models
 
-def evaluate_models():
-    pass
+def evaluate_models(country_dfs, model):
+    # get MSE, RMSE and MAPE for each model on its test set using crossvalidation
+    # should we possibly also use the different ARIMA forms here @Wesley1701?
+
+    # note for MAPE from sklearn: 
+    # Note that we are not using the common “percentage” definition: the percentage in the range [0, 100] is converted to a relative value in the range [0, 1] by dividing by 100. 
+    # Thus, an error of 200% corresponds to a relative error of 2.
+    evaluation_metrics = {}
+    for country, data in country_dfs.items():
+        test = data['test']
+        model_fit = model[country]
+        forecast = model_fit.predict(start=test.index[0], end=test.index[-1])
+        mape = mean_absolute_percentage_error(test, forecast)
+        mse = mean_squared_error(test, forecast)
+        rmse = root_mean_squared_error(test, forecast)
+        evaluation_metrics[country] = {'MSE': mse, 'RMSE': rmse, 'MAPE': mape}
+
+    eval_df = pd.DataFrame.from_dict(evaluation_metrics, orient='index')
+    eval_df.to_csv('evaluation_metrics.csv')
+
+
+def evaluate_models_cross(country_dfs, model):
+    # get MSE, RMSE and MAPE for each model on its test set using crossvalidation
+    # same notes as above
+    evaluation_metrics_cross = {}
+    for country, data in country_dfs.items():
+        series = data['train']._append(data['test'])
+        model_fit = model[country]
+        n_splits = 5
+        mse_list = []
+        rmse_list = []
+        mape_list = []
+        split_size = len(series) // n_splits
+        for i in range(n_splits):
+            train_end = (i + 1) * split_size
+            train = series[:train_end]
+            test = series[train_end:train_end + split_size]
+            if len(test) == 0:
+                continue
+            model_cv = ARIMA(train, order=(2, 1, 1)).fit()
+            forecast = model_cv.predict(start=test.index[0], end=test.index[-1])
+            mse_list.append(mean_squared_error(test, forecast))
+            rmse_list.append(root_mean_squared_error(test, forecast))
+            mape_list.append(mean_absolute_percentage_error(test, forecast))
+        evaluation_metrics_cross[country] = {
+            'MSE': np.mean(mse_list),
+            'RMSE': np.mean(rmse_list),
+            'MAPE': np.mean(mape_list)
+        }
+   
+    eval_df = pd.DataFrame.from_dict(evaluation_metrics_cross, orient='index')
+    eval_df.to_csv('evaluation_metrics.csv')
+
+
 
 def create_plots(models, country_dfs, timerange, forecast_horizon):
     country = 'USA'  # Example: using the first country
@@ -70,3 +123,6 @@ if __name__ == "__main__":
     arima_order = parameters['arima_orders'][0]  # Example: using the first ARIMA order
     country_models = create_models(country_dfs, parameters['model'], arima_order)
     create_plots(country_models, country_dfs, parameters['test_period'], parameters['forecast_horizon'])
+    evaluate_models(country_dfs, country_models)
+    evaluate_models_cross(country_dfs, country_models)
+ 
