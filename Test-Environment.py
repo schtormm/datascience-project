@@ -1,16 +1,17 @@
+import json
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import statsmodels.api as sm
-from scipy import stats
-from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error, root_mean_squared_error
-from statsmodels.tsa.arima.model import ARIMA
-from statsmodels.graphics.tsaplots import plot_predict
-
-from statsmodels.graphics.api import qqplot
-
 import pmdarima as pm
+import statsmodels.api as sm
 from pmdarima.model_selection import train_test_split
+from scipy import stats
+from sklearn.metrics import (mean_absolute_percentage_error,
+                             mean_squared_error, root_mean_squared_error)
+from statsmodels.graphics.api import qqplot
+from statsmodels.graphics.tsaplots import plot_predict
+from statsmodels.tsa.arima.model import ARIMA
 
 dataset = 'cleaned_V11.csv'
 parameters = {'country': ['USA', 'DNK', 'NLD'], 
@@ -18,6 +19,10 @@ parameters = {'country': ['USA', 'DNK', 'NLD'],
               'forecast_horizon': 10,
               'model': 'ARIMA',
               'arima_orders': [(2, 1, 1), (2, 1, 3), (3, 1, 2)]}
+# mute sklearn warnings
+import warnings
+
+warnings.filterwarnings("ignore")
 
 def get_parameters():
     return parameters
@@ -101,20 +106,26 @@ def evaluate_models_cross(country_dfs, model):
 
 
 def create_plots(models, country_dfs, timerange, forecast_horizon):
-    country = 'USA'  # Example: using the first country
-    model = models[country]
-    plot_predict(model, start=timerange[1], end=(timerange[1] + forecast_horizon), ax=None)
-    country_dfs[country]['train'].plot(label='Observed')
-    # make sure plot only shows from 2000 onwards
-    plt.xlim([timerange[0], timerange[1] + forecast_horizon])
-    # get rid of 1e6 notation on y-axis
-    plt.ticklabel_format(style='plain', axis='y')
-    # add title and labels
-    plt.title(f'ARIMA(3,0,1) Forecast of rgdpe for {country}')
-    plt.xlabel('Year')
-    plt.ylabel('Real GDP (in millions)')
-    plt.legend()
-    plt.show()  
+    print(f'Models: {json.dumps(models, indent=4, default=str)}')
+    for country in models.keys():
+        plt.figure(figsize=(10, 6))
+        model = models[country]
+        plot_predict(model, start=timerange[1], end=(timerange[1] + forecast_horizon), ax=None)
+        country_dfs[country]['train'].plot(label='Observed')
+        # make sure plot only shows from 2000 onwards
+        plt.xlim([timerange[0], timerange[1] + forecast_horizon])
+        # get rid of 1e6 notation on y-axis
+        plt.ticklabel_format(style='plain', axis='y')
+        # add title and labels
+        plt.title(f'ARIMA(2,1,1) Forecast of rgdpe for {country}')
+        plt.xlabel('Year')
+        plt.ylabel('Real GDP (in millions)')
+        plt.legend()
+        # Save the plot to a file
+        plot_name = f'plots_{country}.png'
+        plt.savefig(plot_name, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"Plot saved for {country}: {plot_name}")  
 
 
 
