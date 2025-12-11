@@ -14,17 +14,25 @@ from statsmodels.graphics.tsaplots import plot_predict
 from statsmodels.tsa.arima.model import ARIMA
 
 dataset = 'cleaned_V11.csv'
-parameters = {'country': ['USA', 'DNK', 'NLD'], 
-              'test_period': [1950, 2000],
-              'forecast_horizon': 10,
-              'model': 'ARIMA',
-              'arima_orders': [(2, 1, 1), (2, 1, 3), (3, 1, 2)]}
 # mute sklearn warnings
 import warnings
 
 warnings.filterwarnings("ignore")
 
 def get_parameters():
+    filename = 'testset.json'
+    try:
+        with open(filename, 'r') as f:
+            parameters = json.load(f)
+    except FileNotFoundError:
+        print(f"Parameter file {filename} not found. Using default parameters.")
+        parameters = {'country_codes': ['USA', 'DNK', 'NLD'], 
+                      'test_period': [1950, 2000],
+                      'forecast_horizon': 10,
+                      'model': 'ARIMA',
+                      "parameters": {
+                        "orders": [[2, 1, 2], [2, 1, 3], [3, 1, 2]]
+                    }}       
     return parameters
 
 def create_dataset(countries, test_period, dataset):
@@ -39,7 +47,8 @@ def create_dataset(countries, test_period, dataset):
         country_dfs[country] = {'train': train, 'test': test}
     return country_dfs
 
-def create_models(country_dfs, model, arima_order = None):
+def create_models(country_dfs, model, parameters):
+    arima_order = parameters['orders'][0]  # Example: using the first ARIMA order
     # For each country, create and fit an ARIMA model and save it in a dictionary
     country_models = {}
     print(f"Creating models with order {arima_order} for countries:", list(country_dfs.keys()))
@@ -127,12 +136,12 @@ def create_plots(models, country_dfs, timerange, forecast_horizon):
         plt.close()
         print(f"Plot saved for {country}: {plot_name}")  
 
-
-
 if __name__ == "__main__":
-    country_dfs = create_dataset(parameters['country'], parameters['test_period'], dataset)
-    arima_order = parameters['arima_orders'][0]  # Example: using the first ARIMA order
-    country_models = create_models(country_dfs, parameters['model'], arima_order)
+    parameters = get_parameters()
+    print(f"Parameters: {parameters}")
+    country_dfs = create_dataset(parameters['country_codes'], parameters['test_period'], dataset)
+    # arima_order = parameters['parameters']['orders'][0]  # Example: using the first ARIMA order
+    country_models = create_models(country_dfs, parameters['model'], parameters['parameters'])
     create_plots(country_models, country_dfs, parameters['test_period'], parameters['forecast_horizon'])
     evaluate_models(country_dfs, country_models)
     evaluate_models_cross(country_dfs, country_models)
