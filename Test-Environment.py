@@ -47,7 +47,8 @@ def create_dataset(countries, test_period, dataset):
         country_dfs[country] = {'train': train, 'test': test}
     return country_dfs
 
-def create_models(country_dfs, model, arima_order = None):
+def create_models(country_dfs, model, parameters):
+    arima_order = parameters['orders'][0]  # Example: using the first ARIMA order
     # For each country, create and fit an ARIMA model and save it in a dictionary
     country_models = {}
     print(f"Creating models with order {arima_order} for countries:", list(country_dfs.keys()))
@@ -139,8 +140,8 @@ if __name__ == "__main__":
     parameters = get_parameters()
     print(f"Parameters: {parameters}")
     country_dfs = create_dataset(parameters['country_codes'], parameters['test_period'], dataset)
-    arima_order = parameters['parameters']['orders'][0]  # Example: using the first ARIMA order
-    country_models = create_models(country_dfs, parameters['model'], arima_order)
+    # arima_order = parameters['parameters']['orders'][0]  # Example: using the first ARIMA order
+    country_models = create_models(country_dfs, parameters['model'], parameters['parameters'])
     create_plots(country_models, country_dfs, parameters['test_period'], parameters['forecast_horizon'])
     evaluate_models(country_dfs, country_models)
     evaluate_models_cross(country_dfs, country_models)
