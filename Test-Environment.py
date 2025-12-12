@@ -9,6 +9,7 @@ from pmdarima.model_selection import train_test_split
 from scipy import stats
 from sklearn.metrics import (mean_absolute_percentage_error,
                              mean_squared_error, root_mean_squared_error)
+from sklearn.linear_model import LinearRegression
 from statsmodels.graphics.api import qqplot
 from statsmodels.graphics.tsaplots import plot_predict
 from statsmodels.tsa.arima.model import ARIMA
@@ -19,8 +20,7 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-def get_parameters():
-    filename = 'parameters.json'
+def get_parameters(filename = 'parameters.json'):
     try:
         with open(filename, 'r') as f:
             parameters = json.load(f)
@@ -47,7 +47,7 @@ def create_dataset(countries, test_period, dataset):
         country_dfs[country] = {'train': train, 'test': test}
     return country_dfs
 
-def create_models_ARIMA(country_dfs, model, parameters):
+def create_models_ARIMA(country_dfs, parameters):
     arima_orders = parameters['orders']  # Example: using the first ARIMA order
     # For each country, create and fit an ARIMA model and save it in a dictionary
     country_models = {}
@@ -61,7 +61,22 @@ def create_models_ARIMA(country_dfs, model, parameters):
 
     return country_models
 
-def evaluate_models_arima(country_dfs, models):
+def create_models_linear(country_dfs, parameters):
+    exp = parameters['is_exponential']
+    country_models = {}
+    print("Creating models for countries:", list(country_dfs.keys()))
+    for country, data in country_dfs.items():
+        X_train = data['train'].index.to_numpy().reshape(-1, 1)
+        if exp:
+            y_train = np.log(data['train'].values)            
+        else:
+            y_train = data['train'].values
+        print(f"Fitting {'exponential' if exp else 'linear'} data of {country} in to the model")
+        linear_model = LinearRegression().fit(X_train, y_train)
+        country_models[country] = linear_model
+    return country_models
+
+def evaluate_models(country_dfs, models, used_model = None):
     # get MSE, RMSE and MAPE for each model on its test set using crossvalidation
 
     # note for MAPE from sklearn: 
@@ -72,14 +87,25 @@ def evaluate_models_arima(country_dfs, models):
         evaluation_metrics[country] = []
         test = data['test']
         models_to_evaluate = models[country]
-        for model_fit in models_to_evaluate:
-            forecast = model_fit.predict(start=test.index[0], end=test.index[-1])
-            order = model_fit.model.order
+        if type(models_to_evaluate) == list:
+            for model_fit in models_to_evaluate:
+                forecast = model_fit.predict(start=test.index[0], end=test.index[-1])
+                mape = mean_absolute_percentage_error(test, forecast)
+                mse = mean_squared_error(test, forecast)
+                rmse = root_mean_squared_error(test, forecast)
+                if used_model == 'ARIMA':
+                    order = model_fit.model.order
+                    evaluation_metrics[country].append({'ARIMA Order': order, 'MSE': mse, 'RMSE': rmse, 'MAPE': mape})
+                else:
+                    evaluation_metrics[country].append({'MSE': mse, 'RMSE': rmse, 'MAPE': mape})
+
+        else:
+            x = test.index.to_numpy()
+            forecast = models_to_evaluate.predict(x.reshape(-1, 1))
             mape = mean_absolute_percentage_error(test, forecast)
             mse = mean_squared_error(test, forecast)
             rmse = root_mean_squared_error(test, forecast)
-            evaluation_metrics[country].append({'ARIMA Order': order, 'MSE': mse, 'RMSE': rmse, 'MAPE': mape})
-        
+            evaluation_metrics[country] = {'MSE': mse, 'RMSE': rmse, 'MAPE': mape}
 
     eval_df = pd.DataFrame.from_dict(evaluation_metrics, orient='index')
     eval_df.to_csv('evaluation_metrics.csv')
@@ -159,17 +185,20 @@ def create_plots_arima(models, country_dfs, timerange, forecast_horizon):
         print(f"Plot saved for {country}: {plot_name}")  
 
 if __name__ == "__main__":
-    parameters = get_parameters()
+    parameters = get_parameters('parameters_linear.json')
     print(f"Parameters: {parameters}")
     country_dfs = create_dataset(parameters['country_codes'], parameters['test_period'], dataset)
 
     #maybe move this into the switch statement
-    country_models = create_models_ARIMA(country_dfs, parameters['model'], parameters['parameters'])
     match parameters['model']:
         case 'ARIMA':
+            country_models = create_models_ARIMA(country_dfs, parameters['parameters'])
             create_plots_arima(country_models, country_dfs, parameters['test_period'], parameters['forecast_horizon'])
-            evaluate_models_arima(country_dfs, country_models)
+            evaluate_models(country_dfs, country_models)
             evaluate_models_cross_ARIMA(country_dfs, country_models)
+        case 'Linear Regression':
+            country_models = create_models_linear(country_dfs, parameters['parameters'])
+            evaluate_models(country_dfs, country_models)
         case _:
             raise ValueError(f"Model {parameters['model']} not recognized.")
     

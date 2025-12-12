@@ -2,8 +2,8 @@
     "country_codes": ["USA", "DNK", "NLD"],
     "test_period": [1950, 2000],
     "forecast_horizon": 10,
-    "model": "ARIMA",
+    "model": "Linear Regression",
     "parameters": {
-        "orders": [[2, 1, 2], [2, 0, 0]]
+        "is_exponential": false
     }
 }
