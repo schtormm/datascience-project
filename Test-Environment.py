@@ -20,7 +20,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 def get_parameters():
-    filename = 'testset.json'
+    filename = 'parameters.json'
     try:
         with open(filename, 'r') as f:
             parameters = json.load(f)
