@@ -76,7 +76,23 @@ def create_models_linear(country_dfs, parameters):
         country_models[country] = linear_model
     return country_models
 
-def evaluate_models(country_dfs, models, used_model = None):
+def get_predictions(country_dfs, models):
+    predictions = {}
+    for country, data in country_dfs.items():
+        models_to_evaluate = models[country]
+        test = data['test']
+        if type(models_to_evaluate) == list:
+            predictions[country] = {}
+            for model_fit in models_to_evaluate:
+                forecast = model_fit.predict(start=test.index[0], end=test.index[-1])
+                order = model_fit.model.order
+                predictions[country][order] = forecast
+        else:
+            x = test.index.to_numpy()
+            predictions[country] = models_to_evaluate.predict(x.reshape(-1, 1))
+    return predictions
+
+def evaluate_models(country_dfs, predictions, models, used_model = None):
     # get MSE, RMSE and MAPE for each model on its test set using crossvalidation
 
     # note for MAPE from sklearn: 
@@ -86,25 +102,21 @@ def evaluate_models(country_dfs, models, used_model = None):
     for country, data in country_dfs.items():
         evaluation_metrics[country] = []
         test = data['test']
-        models_to_evaluate = models[country]
-        if type(models_to_evaluate) == list:
-            for model_fit in models_to_evaluate:
-                forecast = model_fit.predict(start=test.index[0], end=test.index[-1])
-                mape = mean_absolute_percentage_error(test, forecast)
-                mse = mean_squared_error(test, forecast)
-                rmse = root_mean_squared_error(test, forecast)
+        predictions_for_country = predictions[country]
+        if type(predictions_for_country) == dict:
+            for key in predictions_for_country:
+                preds = predictions_for_country[key]
+                mape = mean_absolute_percentage_error(test, preds)
+                mse = mean_squared_error(test, preds)
+                rmse = root_mean_squared_error(test, preds)
                 if used_model == 'ARIMA':
-                    order = model_fit.model.order
-                    evaluation_metrics[country].append({'ARIMA Order': order, 'MSE': mse, 'RMSE': rmse, 'MAPE': mape})
+                    evaluation_metrics[country].append({'ARIMA Order': key, 'MSE': mse, 'RMSE': rmse, 'MAPE': mape})
                 else:
                     evaluation_metrics[country].append({'MSE': mse, 'RMSE': rmse, 'MAPE': mape})
-
         else:
-            x = test.index.to_numpy()
-            forecast = models_to_evaluate.predict(x.reshape(-1, 1))
-            mape = mean_absolute_percentage_error(test, forecast)
-            mse = mean_squared_error(test, forecast)
-            rmse = root_mean_squared_error(test, forecast)
+            mape = mean_absolute_percentage_error(test, predictions_for_country)
+            mse = mean_squared_error(test, predictions_for_country)
+            rmse = root_mean_squared_error(test, predictions_for_country)
             evaluation_metrics[country] = {'MSE': mse, 'RMSE': rmse, 'MAPE': mape}
 
     eval_df = pd.DataFrame.from_dict(evaluation_metrics, orient='index')
@@ -193,12 +205,15 @@ if __name__ == "__main__":
     match parameters['model']:
         case 'ARIMA':
             country_models = create_models_ARIMA(country_dfs, parameters['parameters'])
+            predictions = get_predictions(country_dfs, country_models)
+            # print(predictions)
             create_plots_arima(country_models, country_dfs, parameters['test_period'], parameters['forecast_horizon'])
-            evaluate_models(country_dfs, country_models)
+            evaluate_models(country_dfs, predictions, country_models, 'ARIMA')
             evaluate_models_cross_ARIMA(country_dfs, country_models)
         case 'Linear Regression':
             country_models = create_models_linear(country_dfs, parameters['parameters'])
-            evaluate_models(country_dfs, country_models)
+            predictions = get_predictions(country_dfs, country_models)
+            evaluate_models(country_dfs, predictions, country_models)
         case _:
             raise ValueError(f"Model {parameters['model']} not recognized.")
     
