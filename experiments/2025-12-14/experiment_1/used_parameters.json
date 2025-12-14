@@ -9,8 +9,19 @@
         2000
     ],
     "forecast_horizon": 10,
-    "model": "Linear Regression",
+    "model": "ARIMA",
     "parameters": {
-        "is_exponential": true
+        "orders": [
+            [
+                2,
+                1,
+                2
+            ],
+            [
+                2,
+                0,
+                0
+            ]
+        ]
     }
 }

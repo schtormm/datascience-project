@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 import json
+from collections import defaultdict
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -122,7 +123,7 @@ def get_predictions(country_dfs, models, forecast_horizon = None, is_exponential
                 predictions[country] = np.exp(predictions[country])
     return predictions
 
-def evaluate_models(country_dfs, predictions, models, used_model = None, output_folder='experiments'):
+def evaluate_models(country_dfs, predictions, used_model = None, output_folder='experiments'):
     # get MSE, RMSE and MAPE for each model on its test set using crossvalidation
 
     # note for MAPE from sklearn: 
@@ -134,6 +135,7 @@ def evaluate_models(country_dfs, predictions, models, used_model = None, output_
         test = data['test']
         predictions_for_country = predictions[country]
         if type(predictions_for_country) == dict:
+            is_dict = True
             for key in predictions_for_country:
                 preds = predictions_for_country[key]
                 mape = mean_absolute_percentage_error(test, preds)
@@ -144,12 +146,42 @@ def evaluate_models(country_dfs, predictions, models, used_model = None, output_
                 else:
                     evaluation_metrics[country].append({'MSE': mse, 'RMSE': rmse, 'MAPE': mape})
         else:
+            is_dict = False
             mape = mean_absolute_percentage_error(test, predictions_for_country)
             mse = mean_squared_error(test, predictions_for_country)
             rmse = root_mean_squared_error(test, predictions_for_country)
             evaluation_metrics[country] = {'MSE': mse, 'RMSE': rmse, 'MAPE': mape}
 
     eval_df = pd.DataFrame.from_dict(evaluation_metrics, orient='index')
+    
+    # Calculate mean metrics across all countries
+    if is_dict == False:
+        # When metrics are directly stored (not lists)
+        mean_metrics = eval_df.mean()
+        mean_row = pd.DataFrame([mean_metrics], index=['Mean'])
+        eval_df = pd.concat([eval_df, mean_row])
+    else:
+        # Group metrics by ARIMA order
+        metrics_by_order = defaultdict(lambda: {'MSE': [], 'RMSE': [], 'MAPE': []})
+
+        for country in evaluation_metrics:
+            for model in evaluation_metrics[country]:
+                order = model['ARIMA Order']
+                metrics_by_order[order]['MSE'].append(model['MSE'])
+                metrics_by_order[order]['RMSE'].append(model['RMSE'])
+                metrics_by_order[order]['MAPE'].append(model['MAPE'])
+
+        # Calculate means for each ARIMA order
+        mean_metrics = {}
+        for order, metrics in metrics_by_order.items():
+            mean_metrics[order] = {
+                'MSE': np.mean(metrics['MSE']),
+                'RMSE': np.mean(metrics['RMSE']),
+                'MAPE': np.mean(metrics['MAPE']),
+        }
+        mean_row = pd.DataFrame([mean_metrics], index=['Mean'])
+        eval_df = pd.concat([eval_df, mean_row])
+            
     eval_df.to_csv(f'{output_folder}/evaluation_metrics.csv')
 
 
@@ -311,7 +343,7 @@ if __name__ == "__main__":
             predictions = get_predictions(country_dfs, country_models, forecast_horizon=parameters['forecast_horizon'])
             # print(predictions)
             create_plots_arima(predictions, country_dfs, parameters['test_period'], parameters['forecast_horizon'], output_folder=output_folder)
-            evaluate_models(country_dfs, predictions, country_models, 'ARIMA', output_folder=output_folder)
+            evaluate_models(country_dfs, predictions, 'ARIMA', output_folder=output_folder)
             evaluate_models_cross_ARIMA(country_dfs, country_models, output_folder=output_folder)
         case 'Linear Regression':
             country_models = create_models_linear(country_dfs, parameters['parameters'])
