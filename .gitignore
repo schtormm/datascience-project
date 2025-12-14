@@ -13,3 +13,6 @@ evaluation_metrics_cross.csv
 
 # ignore plots_*.png files, as these are generated
 plots_*.png
+
+# ignore experiment folder
+experiments/

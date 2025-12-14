@@ -297,7 +297,7 @@ def create_plots(predictions, country_dfs, timerange, forecast_horizon, output_f
         print(f"Plot saved for {country}")
 
 if __name__ == "__main__":
-    parameters_filename = 'parameters_linear.json'  # Change this to switch parameter files
+    parameters_filename = 'parameters.json'  # Change this to switch parameter files
 
     output_folder = output_folder_setup(parameters_filename)
     parameters = get_parameters(parameters_filename)
