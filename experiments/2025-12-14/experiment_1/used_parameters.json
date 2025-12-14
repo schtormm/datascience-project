@@ -1,0 +1,16 @@
+{
+    "country_codes": [
+        "USA",
+        "DNK",
+        "NLD"
+    ],
+    "test_period": [
+        1950,
+        2000
+    ],
+    "forecast_horizon": 10,
+    "model": "Linear Regression",
+    "parameters": {
+        "is_exponential": true
+    }
+}

@@ -1,3 +1,5 @@
+import os
+from datetime import datetime
 import json
 
 import matplotlib.pyplot as plt
@@ -15,10 +17,36 @@ from statsmodels.graphics.tsaplots import plot_predict
 from statsmodels.tsa.arima.model import ARIMA
 
 dataset = 'cleaned_V11.csv'
+
 # mute sklearn warnings
 import warnings
 
 warnings.filterwarnings("ignore")
+
+def output_folder_setup(parameters_filename='parameters.json'):
+    # Create nested structure
+    date_folder = datetime.now().strftime("%Y-%m-%d")
+    base_path = f"experiments/{date_folder}"
+    os.makedirs(base_path, exist_ok=True)
+
+    # Find the next experiment number
+    experiment_num = 1
+    while os.path.exists(f"{base_path}/experiment_{experiment_num}"):
+        experiment_num += 1
+
+    output_folder = f"{base_path}/experiment_{experiment_num}"
+    os.makedirs(output_folder, exist_ok=True)
+
+    # Save parameters to the output folder
+    try:
+        with open(parameters_filename, 'r') as f:
+            parameters = json.load(f)
+        with open(f"{output_folder}/used_parameters.json", 'w') as f_out:
+            json.dump(parameters, f_out, indent=4)
+    except FileNotFoundError:
+        print(f"Parameter file {parameters_filename} not found. No parameters saved.")
+
+    return output_folder
 
 def get_parameters(filename = 'parameters.json'):
     try:
@@ -94,7 +122,7 @@ def get_predictions(country_dfs, models, forecast_horizon = None, is_exponential
                 predictions[country] = np.exp(predictions[country])
     return predictions
 
-def evaluate_models(country_dfs, predictions, models, used_model = None):
+def evaluate_models(country_dfs, predictions, models, used_model = None, output_folder='experiments'):
     # get MSE, RMSE and MAPE for each model on its test set using crossvalidation
 
     # note for MAPE from sklearn: 
@@ -122,10 +150,10 @@ def evaluate_models(country_dfs, predictions, models, used_model = None):
             evaluation_metrics[country] = {'MSE': mse, 'RMSE': rmse, 'MAPE': mape}
 
     eval_df = pd.DataFrame.from_dict(evaluation_metrics, orient='index')
-    eval_df.to_csv('evaluation_metrics.csv')
+    eval_df.to_csv(f'{output_folder}/evaluation_metrics.csv')
 
 
-def evaluate_models_cross_ARIMA(country_dfs, models):
+def evaluate_models_cross_ARIMA(country_dfs, models, output_folder='experiments'):
     # get MSE, RMSE and MAPE for each model on its test set using crossvalidation
     # same notes as above
     evaluation_metrics_cross = {}
@@ -164,10 +192,10 @@ def evaluate_models_cross_ARIMA(country_dfs, models):
                 })
    
     eval_df = pd.DataFrame.from_dict(evaluation_metrics_cross, orient='index')
-    eval_df.to_csv('evaluation_metrics_cross.csv')
+    eval_df.to_csv(f'{output_folder}/evaluation_metrics_cross.csv')
 
 
-def create_plots_arima(predictions, country_dfs, timerange, forecast_horizon):  
+def create_plots_arima(predictions, country_dfs, timerange, forecast_horizon, output_folder='experiments'):  
     for country in predictions.keys():
         orders = predictions[country].keys()
         num_models = len(orders)
@@ -203,9 +231,8 @@ def create_plots_arima(predictions, country_dfs, timerange, forecast_horizon):
             axs[i].legend()
             i +=1
         # Save the plot to a file
-        plot_name = f'plots_{country}.png'
-        fig.savefig(plot_name, dpi=300, bbox_inches='tight')
-        print(f"Plot saved for {country}: {plot_name}")
+        fig.savefig(f'{output_folder}/plots_{country}.png', dpi=300, bbox_inches='tight')
+        print(f"Plots saved for {country}")
         plt.close(fig)
 
     # Plot 2: All countries with all their models
@@ -243,11 +270,11 @@ def create_plots_arima(predictions, country_dfs, timerange, forecast_horizon):
         axs[idx].legend()
 
     # Save the combined plot
-    fig.savefig('plots_all_countries.png', dpi=300, bbox_inches='tight')
+    fig.savefig(f'{output_folder}/plots_all_countries.png', dpi=300, bbox_inches='tight')
     print("Combined plot saved for all countries: plots_all_countries.png")
     plt.close(fig)    
 
-def create_plots(predictions, country_dfs, timerange, forecast_horizon):
+def create_plots(predictions, country_dfs, timerange, forecast_horizon, output_folder='experiments'):
     for country in predictions.keys():
         plt.figure(figsize=(10, 6))
 
@@ -265,13 +292,15 @@ def create_plots(predictions, country_dfs, timerange, forecast_horizon):
         plt.xlabel('Year')
         plt.ylabel('Real GDP (in millions)')
         plt.legend()
-        plot_name = f'plots_{country}.png'
-        plt.savefig(plot_name, dpi=300, bbox_inches='tight')
+        plt.savefig(f'{output_folder}/plots_{country}.png', dpi=300, bbox_inches='tight')
         plt.close()
-        print(f"Plot saved for {country}: {plot_name}")
+        print(f"Plot saved for {country}")
 
 if __name__ == "__main__":
-    parameters = get_parameters('parameters_linear.json')
+    parameters_filename = 'parameters_linear.json'  # Change this to switch parameter files
+
+    output_folder = output_folder_setup(parameters_filename)
+    parameters = get_parameters(parameters_filename)
     print(f"Parameters: {parameters}")
     country_dfs = create_dataset(parameters['country_codes'], parameters['test_period'], parameters['forecast_horizon'], dataset)
 
@@ -281,14 +310,14 @@ if __name__ == "__main__":
             country_models = create_models_ARIMA(country_dfs, parameters['parameters'])
             predictions = get_predictions(country_dfs, country_models, forecast_horizon=parameters['forecast_horizon'])
             # print(predictions)
-            create_plots_arima(predictions, country_dfs, parameters['test_period'], parameters['forecast_horizon'])
-            evaluate_models(country_dfs, predictions, country_models, 'ARIMA')
-            evaluate_models_cross_ARIMA(country_dfs, country_models)
+            create_plots_arima(predictions, country_dfs, parameters['test_period'], parameters['forecast_horizon'], output_folder=output_folder)
+            evaluate_models(country_dfs, predictions, country_models, 'ARIMA', output_folder=output_folder)
+            evaluate_models_cross_ARIMA(country_dfs, country_models, output_folder=output_folder)
         case 'Linear Regression':
             country_models = create_models_linear(country_dfs, parameters['parameters'])
             predictions = get_predictions(country_dfs, country_models, is_exponential=parameters['parameters']['is_exponential'])
-            evaluate_models(country_dfs, predictions, country_models)
-            create_plots(predictions, country_dfs, parameters['test_period'], parameters['forecast_horizon'])
+            evaluate_models(country_dfs, predictions, country_models, output_folder=output_folder)
+            create_plots(predictions, country_dfs, parameters['test_period'], parameters['forecast_horizon'], output_folder=output_folder)
         case _:
             raise ValueError(f"Model {parameters['model']} not recognized.")
     
