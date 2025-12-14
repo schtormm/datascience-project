@@ -76,7 +76,7 @@ def create_models_linear(country_dfs, parameters):
         country_models[country] = linear_model
     return country_models
 
-def get_predictions(country_dfs, models, is_exponential = False):
+def get_predictions(country_dfs, models, forecast_horizon = None, is_exponential = False):
     predictions = {}
     for country, data in country_dfs.items():
         models_to_evaluate = models[country]
@@ -84,9 +84,9 @@ def get_predictions(country_dfs, models, is_exponential = False):
         if type(models_to_evaluate) == list:
             predictions[country] = {}
             for model_fit in models_to_evaluate:
-                forecast = model_fit.predict(start=test.index[0], end=test.index[-1])
+                forecast = model_fit.get_forecast(steps=forecast_horizon)
                 order = model_fit.model.order
-                predictions[country][order] = forecast
+                predictions[country][order] = forecast.predicted_mean
         else:
             x = test.index.to_numpy()
             predictions[country] = models_to_evaluate.predict(x.reshape(-1, 1))
@@ -167,42 +167,98 @@ def evaluate_models_cross_ARIMA(country_dfs, models):
     eval_df.to_csv('evaluation_metrics_cross.csv')
 
 
+def create_plots_arima(predictions, country_dfs, timerange, forecast_horizon):  
+    for country in predictions.keys():
+        orders = predictions[country].keys()
+        num_models = len(orders)
+        
+        fig, axs = plt.subplots(num_models, 1, figsize=(10, 5 * num_models))
+        
+        if num_models == 1:
+            axs = [axs]
 
-def create_plots_arima(models, country_dfs, timerange, forecast_horizon):  
-    for country in models.keys():
-        fig, axs = plt.subplots(3, 1, figsize=(10, 20))
-        model = models[country]
         # create one plot
         i = 0
-        for m in model:
+        for order in orders:
             # put plot in the figure
-            forecast = m.get_forecast(steps=forecast_horizon)
+            forecast = predictions[country][order]
             forecast_index = np.arange(timerange[1], timerange[1] + forecast_horizon)
-            # subplot for each model
-            axs[i].plot(forecast_index, forecast.predicted_mean, label=f'Forecast ARIMA{m.model.order}')
-            country_dfs[country]['train'].plot(ax=axs[i], label='Observed')
+            
+            # Plot forecast and observed data
+            axs[i].plot(forecast_index, forecast, label=f'Forecast ARIMA{order}', linestyle='--')
+            # Concatenate train and test for continuous line
+            observed_data = pd.concat([country_dfs[country]['train'], country_dfs[country]['test']])
+            observed_data.plot(ax=axs[i], label='Observed Data', color='blue')
+            # Highlight test portion
+            country_dfs[country]['test'].plot(ax=axs[i], label='Actual Data', color='red', linewidth=2)
+
             # make sure plot only shows from 2000 onwards
             axs[i].set_xlim([timerange[0], timerange[1] + forecast_horizon])
             # get rid of 1e6 notation on y-axis
             axs[i].ticklabel_format(style='plain', axis='y')
             # add title and labels
-            axs[i].set_title(f'ARIMA{m.model.order} Forecast of rgdpe for {country}')
+            axs[i].set_title(f'ARIMA{order} Forecast of rgdpe for {country}')
             axs[i].set_xlabel('Year')
             axs[i].set_ylabel('Real GDP (in millions)')
             axs[i].legend()
             i +=1
-            # Save the plot to a file
-            plot_name = f'plots_{country}.png'
+        # Save the plot to a file
+        plot_name = f'plots_{country}.png'
         fig.savefig(plot_name, dpi=300, bbox_inches='tight')
+        print(f"Plot saved for {country}: {plot_name}")
+        plt.close(fig)
+
+    # Plot 2: All countries with all their models
+    num_countries = len(predictions.keys())
+    fig, axs = plt.subplots(num_countries, 1, figsize=(12, 6 * num_countries))
+
+    # Handle case where there's only one country
+    if num_countries == 1:
+        axs = [axs]
+
+    for idx, country in enumerate(predictions.keys()):
+        orders = predictions[country].keys()
         
-        print(f"Plot saved for {country}: {plot_name}")  
+        # Plot observed data
+        observed_data = pd.concat([country_dfs[country]['train'], country_dfs[country]['test']])
+        observed_data.plot(ax=axs[idx], label='Observed Data', linewidth=2, color='blue')
+        # Highlight test portion
+        country_dfs[country]['test'].plot(ax=axs[idx], label='Actual Data', color='red', linewidth=2)
+        
+        # Plot all models for this country
+        for order in orders:
+            forecast = predictions[country][order]
+            forecast_index = np.arange(timerange[1], timerange[1] + forecast_horizon)
+            axs[idx].plot(forecast_index, forecast, 
+                        label=f'Forecast ARIMA{order}', linestyle='--')
+        
+        # Set x-axis limits and formatting
+        axs[idx].set_xlim([timerange[0], timerange[1] + forecast_horizon])
+        axs[idx].ticklabel_format(style='plain', axis='y')
+        
+        # Add title and labels
+        axs[idx].set_title(f'All ARIMA Model Forecasts for {country}')
+        axs[idx].set_xlabel('Year')
+        axs[idx].set_ylabel('Real GDP (in millions)')
+        axs[idx].legend()
+
+    # Save the combined plot
+    fig.savefig('plots_all_countries.png', dpi=300, bbox_inches='tight')
+    print("Combined plot saved for all countries: plots_all_countries.png")
+    plt.close(fig)    
 
 def create_plots(predictions, country_dfs, timerange, forecast_horizon):
     for country in predictions.keys():
         plt.figure(figsize=(10, 6))
-        plt.plot(country_dfs[country]['train'].index, country_dfs[country]['train'].values, label='Observed')
+
+        # Plot observed data
+        observed_data = pd.concat([country_dfs[country]['train'], country_dfs[country]['test']])
+        observed_data.plot(label='Observed Data', color='blue')
+        # Highlight test portion
+        country_dfs[country]['test'].plot(label='Actual Data', color='red', linewidth=2)
+
         forecast_index = np.arange(timerange[1], timerange[1] + forecast_horizon)
-        plt.plot(forecast_index, predictions[country], label='Forecast Linear Regression')
+        plt.plot(forecast_index, predictions[country], label='Forecast Linear Regression', linestyle='--')
         plt.xlim([timerange[0], timerange[1] + forecast_horizon])
         plt.ticklabel_format(style='plain', axis='y')
         plt.title(f'Linear Regression Forecast of rgdpe for {country}')
@@ -223,14 +279,14 @@ if __name__ == "__main__":
     match parameters['model']:
         case 'ARIMA':
             country_models = create_models_ARIMA(country_dfs, parameters['parameters'])
-            predictions = get_predictions(country_dfs, country_models)
+            predictions = get_predictions(country_dfs, country_models, forecast_horizon=parameters['forecast_horizon'])
             # print(predictions)
-            create_plots_arima(country_models, country_dfs, parameters['test_period'], parameters['forecast_horizon'])
+            create_plots_arima(predictions, country_dfs, parameters['test_period'], parameters['forecast_horizon'])
             evaluate_models(country_dfs, predictions, country_models, 'ARIMA')
             evaluate_models_cross_ARIMA(country_dfs, country_models)
         case 'Linear Regression':
             country_models = create_models_linear(country_dfs, parameters['parameters'])
-            predictions = get_predictions(country_dfs, country_models, parameters['parameters']['is_exponential'])
+            predictions = get_predictions(country_dfs, country_models, is_exponential=parameters['parameters']['is_exponential'])
             evaluate_models(country_dfs, predictions, country_models)
             create_plots(predictions, country_dfs, parameters['test_period'], parameters['forecast_horizon'])
         case _:
