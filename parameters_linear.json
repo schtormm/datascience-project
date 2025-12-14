@@ -4,6 +4,6 @@
     "forecast_horizon": 10,
     "model": "Linear Regression",
     "parameters": {
-        "is_exponential": false
+        "is_exponential": true
     }
 }

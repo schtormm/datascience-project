@@ -35,7 +35,7 @@ def get_parameters(filename = 'parameters.json'):
                     }}       
     return parameters
 
-def create_dataset(countries, test_period, dataset):
+def create_dataset(countries, test_period, forecast_horizon, dataset):
     df = pd.read_csv(dataset)
     # Create a dictionary of dataframes for each country with the test and train split
     country_dfs = {}
@@ -43,7 +43,7 @@ def create_dataset(countries, test_period, dataset):
     for country in countries:
         country_data = df[df['countrycode'] == country].set_index('year')['rgdpe']
         train = country_data[(country_data.index >= test_period[0]) & (country_data.index < test_period[1])]
-        test = country_data[(country_data.index >= test_period[1])]
+        test = country_data[(country_data.index >= test_period[1]) & (country_data.index < test_period[1] + forecast_horizon)]
         country_dfs[country] = {'train': train, 'test': test}
     return country_dfs
 
@@ -76,7 +76,7 @@ def create_models_linear(country_dfs, parameters):
         country_models[country] = linear_model
     return country_models
 
-def get_predictions(country_dfs, models):
+def get_predictions(country_dfs, models, is_exponential = False):
     predictions = {}
     for country, data in country_dfs.items():
         models_to_evaluate = models[country]
@@ -90,6 +90,8 @@ def get_predictions(country_dfs, models):
         else:
             x = test.index.to_numpy()
             predictions[country] = models_to_evaluate.predict(x.reshape(-1, 1))
+            if is_exponential:
+                predictions[country] = np.exp(predictions[country])
     return predictions
 
 def evaluate_models(country_dfs, predictions, models, used_model = None):
@@ -166,8 +168,7 @@ def evaluate_models_cross_ARIMA(country_dfs, models):
 
 
 
-def create_plots_arima(models, country_dfs, timerange, forecast_horizon):
-    
+def create_plots_arima(models, country_dfs, timerange, forecast_horizon):  
     for country in models.keys():
         fig, axs = plt.subplots(3, 1, figsize=(10, 20))
         model = models[country]
@@ -196,10 +197,27 @@ def create_plots_arima(models, country_dfs, timerange, forecast_horizon):
         
         print(f"Plot saved for {country}: {plot_name}")  
 
+def create_plots(predictions, country_dfs, timerange, forecast_horizon):
+    for country in predictions.keys():
+        plt.figure(figsize=(10, 6))
+        plt.plot(country_dfs[country]['train'].index, country_dfs[country]['train'].values, label='Observed')
+        forecast_index = np.arange(timerange[1], timerange[1] + forecast_horizon)
+        plt.plot(forecast_index, predictions[country], label='Forecast Linear Regression')
+        plt.xlim([timerange[0], timerange[1] + forecast_horizon])
+        plt.ticklabel_format(style='plain', axis='y')
+        plt.title(f'Linear Regression Forecast of rgdpe for {country}')
+        plt.xlabel('Year')
+        plt.ylabel('Real GDP (in millions)')
+        plt.legend()
+        plot_name = f'plots_{country}.png'
+        plt.savefig(plot_name, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"Plot saved for {country}: {plot_name}")
+
 if __name__ == "__main__":
     parameters = get_parameters('parameters_linear.json')
     print(f"Parameters: {parameters}")
-    country_dfs = create_dataset(parameters['country_codes'], parameters['test_period'], dataset)
+    country_dfs = create_dataset(parameters['country_codes'], parameters['test_period'], parameters['forecast_horizon'], dataset)
 
     #maybe move this into the switch statement
     match parameters['model']:
@@ -212,8 +230,9 @@ if __name__ == "__main__":
             evaluate_models_cross_ARIMA(country_dfs, country_models)
         case 'Linear Regression':
             country_models = create_models_linear(country_dfs, parameters['parameters'])
-            predictions = get_predictions(country_dfs, country_models)
+            predictions = get_predictions(country_dfs, country_models, parameters['parameters']['is_exponential'])
             evaluate_models(country_dfs, predictions, country_models)
+            create_plots(predictions, country_dfs, parameters['test_period'], parameters['forecast_horizon'])
         case _:
             raise ValueError(f"Model {parameters['model']} not recognized.")
     
