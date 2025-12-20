@@ -1,7 +1,7 @@
-import os
-from datetime import datetime
 import json
+import os
 from collections import defaultdict
+from datetime import datetime
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -10,9 +10,9 @@ import pmdarima as pm
 import statsmodels.api as sm
 from pmdarima.model_selection import train_test_split
 from scipy import stats
+from sklearn.linear_model import LinearRegression
 from sklearn.metrics import (mean_absolute_percentage_error,
                              mean_squared_error, root_mean_squared_error)
-from sklearn.linear_model import LinearRegression
 from statsmodels.graphics.api import qqplot
 from statsmodels.graphics.tsaplots import plot_predict
 from statsmodels.tsa.arima.model import ARIMA
@@ -60,7 +60,7 @@ def get_parameters(filename = 'parameters.json'):
                       'forecast_horizon': 10,
                       'model': 'ARIMA',
                       "parameters": {
-                        "orders": [[2, 1, 2], [2, 1, 3], [3, 1, 2]]
+                        "orders": [[2, 1, 2], [2, 1, 3], [3, 1, 2], [3, 1, 3], [1, 2, 1]]
                     }}       
     return parameters
 
