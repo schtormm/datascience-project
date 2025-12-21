@@ -226,6 +226,59 @@ def evaluate_models_cross_ARIMA(country_dfs, models, output_folder='experiments'
     eval_df = pd.DataFrame.from_dict(evaluation_metrics_cross, orient='index')
     eval_df.to_csv(f'{output_folder}/evaluation_metrics_cross.csv')
 
+def evaluate_models_cross_linear(country_dfs, models, output_folder='experiments'):
+    evaluation_metrics_cross_linear = {}
+    for country, data in country_dfs.items():
+        evaluation_metrics_cross_linear[country] = []
+        full_series = data['train']._append(data['test'])
+        n_splits = 5
+        split_size = len(full_series) // n_splits
+
+        for i in range(n_splits):
+            train_end = (i + 1) * split_size
+            train = full_series[:train_end]
+            test = full_series[train_end:train_end + split_size]
+            if len(test) == 0:
+                continue
+            
+            X_train = train.index.to_numpy().reshape(-1, 1)
+            y_train = train.values
+            X_test = test.index.to_numpy().reshape(-1, 1)
+            y_test = test.values
+
+            try:
+                linear_model_cv = LinearRegression().fit(X_train, y_train)
+                predictions = linear_model_cv.predict(X_test)
+                mse = mean_squared_error(y_test, predictions)
+                rmse = root_mean_squared_error(y_test, predictions)
+                mape = mean_absolute_percentage_error(y_test, predictions)
+
+
+       
+                evaluation_metrics_cross_linear[country].append ({
+                    'MSE (split {})'.format(i+1): mse,
+                    'RMSE (split {})'.format(i+1): rmse,
+                    'MAPE (split {})'.format(i+1): mape
+                })
+            except Exception as e:
+                print(f"Warning: Linear Regression model cross validation failed for {country} on split {i}: {e}")
+                continue
+        # add mean metrics across splits
+        if evaluation_metrics_cross_linear[country]:
+            # try to unscrew this stuff, i should be formatting here but i do some hacky shit with enumerate for the mean,
+            # because we also include per split
+            mse_mean = np.mean([m['MSE (split {})'.format(i+1)] for i, m in enumerate(evaluation_metrics_cross_linear[country])])
+            rmse_mean = np.mean([m['RMSE (split {})'.format(i+1)] for i, m in enumerate(evaluation_metrics_cross_linear[country])])
+            mape_mean = np.mean([m['MAPE (split {})'.format(i+1)] for i, m in enumerate(evaluation_metrics_cross_linear[country])])
+            evaluation_metrics_cross_linear[country].append ({
+                'MSE (mean of all splits)': mse_mean,
+                'RMSE (mean of all splits)': rmse_mean,
+                'MAPE (mean of all splits)': mape_mean
+            })
+    
+    eval_df = pd.DataFrame.from_dict(evaluation_metrics_cross_linear, orient='index')
+    eval_df.to_csv(f'{output_folder}/evaluation_metrics_cross_linear.csv')
+
 
 def create_plots_arima(predictions, country_dfs, timerange, forecast_horizon, output_folder='experiments'):  
     for country in predictions.keys():
@@ -336,7 +389,6 @@ if __name__ == "__main__":
     print(f"Parameters: {parameters}")
     country_dfs = create_dataset(parameters['country_codes'], parameters['test_period'], parameters['forecast_horizon'], dataset)
 
-    #maybe move this into the switch statement
     match parameters['model']:
         case 'ARIMA':
             country_models = create_models_ARIMA(country_dfs, parameters['parameters'])
@@ -349,6 +401,7 @@ if __name__ == "__main__":
             country_models = create_models_linear(country_dfs, parameters['parameters'])
             predictions = get_predictions(country_dfs, country_models, is_exponential=parameters['parameters']['is_exponential'])
             evaluate_models(country_dfs, predictions, country_models, output_folder=output_folder)
+            evaluate_models_cross_linear(country_dfs, country_models, output_folder=output_folder)
             create_plots(predictions, country_dfs, parameters['test_period'], parameters['forecast_horizon'], output_folder=output_folder)
         case _:
             raise ValueError(f"Model {parameters['model']} not recognized.")
