@@ -175,9 +175,9 @@ def evaluate_models(country_dfs, predictions, used_model = None, output_folder='
         mean_metrics = {}
         for order, metrics in metrics_by_order.items():
             mean_metrics[order] = {
-                'MSE': np.mean(metrics['MSE']),
-                'RMSE': np.mean(metrics['RMSE']),
-                'MAPE': np.mean(metrics['MAPE']),
+                'MSE': format(np.mean(metrics['MSE']), '.4f'),
+                'RMSE': format(np.mean(metrics['RMSE']), '.4f'),
+                'MAPE': format(np.mean(metrics['MAPE']), '.4f'),
         }
         mean_row = pd.DataFrame([mean_metrics], index=['Mean'])
         eval_df = pd.concat([eval_df, mean_row])
@@ -218,9 +218,9 @@ def evaluate_models_cross_ARIMA(country_dfs, models, output_folder='experiments'
             if mse_list:  # Only add metrics if we have valid results
                 evaluation_metrics_cross[country].append ({
                     "ARIMA Order": model.model.order,
-                    'MSE (mean of all splits)': np.mean(mse_list),
-                    'RMSE (mean of all splits)': np.mean(rmse_list),
-                    'MAPE (mean of all splits)': np.mean(mape_list)
+                    'MSE (mean of all splits)': format(np.mean(mse_list), '.4f'),
+                    'RMSE (mean of all splits)': format(np.mean(rmse_list), '.4f'),
+                    'MAPE (mean of all splits)': format(np.mean(mape_list), '.4f')
                 })
    
     eval_df = pd.DataFrame.from_dict(evaluation_metrics_cross, orient='index')
@@ -252,8 +252,6 @@ def evaluate_models_cross_linear(country_dfs, models, output_folder='experiments
                 mse = mean_squared_error(y_test, predictions)
                 rmse = root_mean_squared_error(y_test, predictions)
                 mape = mean_absolute_percentage_error(y_test, predictions)
-
-
        
                 evaluation_metrics_cross_linear[country].append ({
                     'MSE (split {})'.format(i+1): mse,
@@ -266,14 +264,14 @@ def evaluate_models_cross_linear(country_dfs, models, output_folder='experiments
         # add mean metrics across splits
         if evaluation_metrics_cross_linear[country]:
             # try to unscrew this stuff, i should be formatting here but i do some hacky shit with enumerate for the mean,
-            # because we also include per split
+            # because we also include it  per split
             mse_mean = np.mean([m['MSE (split {})'.format(i+1)] for i, m in enumerate(evaluation_metrics_cross_linear[country])])
             rmse_mean = np.mean([m['RMSE (split {})'.format(i+1)] for i, m in enumerate(evaluation_metrics_cross_linear[country])])
             mape_mean = np.mean([m['MAPE (split {})'.format(i+1)] for i, m in enumerate(evaluation_metrics_cross_linear[country])])
             evaluation_metrics_cross_linear[country].append ({
-                'MSE (mean of all splits)': mse_mean,
-                'RMSE (mean of all splits)': rmse_mean,
-                'MAPE (mean of all splits)': mape_mean
+                'MSE (mean of all splits)': format(mse_mean, '.4f'),
+                'RMSE (mean of all splits)': format(rmse_mean, '.4f'),
+                'MAPE (mean of all splits)': format(mape_mean, '.4f')
             })
     
     eval_df = pd.DataFrame.from_dict(evaluation_metrics_cross_linear, orient='index')
