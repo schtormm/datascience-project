@@ -379,7 +379,7 @@ def calculate_recession_chances_linear(country_dfs, country_models, output_folde
     recession_chances = {}
     for country, data in country_dfs.items():
         print(f"Calculating recession chances for {country}")
-        print(country_models[country])
+        #print(country_models[country])
         model = country_models[country]
         # because we said we'd do 5 year forecasts
         last_year = data['train'].index[-1]
