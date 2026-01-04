@@ -357,6 +357,41 @@ def create_plots_arima(predictions, country_dfs, timerange, forecast_horizon, ou
     print("Combined plot saved for all countries: plots_all_countries.png")
     plt.close(fig)    
 
+def calculate_recession_chances(country_dfs, country_models, output_folder='experiments'):
+    recession_chances = {}
+    for country, data in country_dfs.items():
+        model_fits = country_models[country]
+        recession_chances[country] = {}
+        for model_fit in model_fits:
+            order = model_fit.model.order
+            # because we said we'd do 5 year forecasts
+            forecast = model_fit.get_forecast(steps=5)
+            forecast_values = forecast.predicted_mean
+            # check for negative pct change
+            recession_prob = np.mean(forecast_values.pct_change().dropna() < 0)
+            recession_chances[country][order] = format(recession_prob, '.4f')
+    
+    recession_df = pd.DataFrame.from_dict(recession_chances, orient='index')
+    recession_df.to_csv(f'{output_folder}/recession_chances.csv')
+
+
+def calculate_recession_chances_linear(country_dfs, country_models, output_folder='experiments'):
+    recession_chances = {}
+    for country, data in country_dfs.items():
+        print(f"Calculating recession chances for {country}")
+        print(country_models[country])
+        model = country_models[country]
+        # because we said we'd do 5 year forecasts
+        last_year = data['train'].index[-1]
+        forecast_years = np.arange(last_year + 1, last_year + 6).reshape(-1, 1)
+        forecast_values = model.predict(forecast_years)
+        # check for negative pct change
+        recession_prob = np.mean(pd.Series(forecast_values).pct_change().dropna() < 0)
+        recession_chances[country] = format(recession_prob, '.4f')  
+    
+    recession_df = pd.DataFrame.from_dict(recession_chances, orient='index', columns=['Recession Probability'])
+    recession_df.to_csv(f'{output_folder}/recession_chances_linear.csv')
+
 def create_plots(predictions, country_dfs, timerange, forecast_horizon, output_folder='experiments'):
     for country in predictions.keys():
         plt.figure(figsize=(10, 6))
@@ -380,7 +415,7 @@ def create_plots(predictions, country_dfs, timerange, forecast_horizon, output_f
         print(f"Plot saved for {country}")
 
 if __name__ == "__main__":
-    parameters_filename = 'parameters.json'  # Change this to switch parameter files
+    parameters_filename = 'parameters_linear.json'  # Change this to switch parameter files
 
     output_folder = output_folder_setup(parameters_filename)
     parameters = get_parameters(parameters_filename)
@@ -395,12 +430,14 @@ if __name__ == "__main__":
             create_plots_arima(predictions, country_dfs, parameters['test_period'], parameters['forecast_horizon'], output_folder=output_folder)
             evaluate_models(country_dfs, predictions, 'ARIMA', output_folder=output_folder)
             evaluate_models_cross_ARIMA(country_dfs, country_models, output_folder=output_folder)
+            calculate_recession_chances(country_dfs, country_models, output_folder=output_folder)
         case 'Linear Regression':
             country_models = create_models_linear(country_dfs, parameters['parameters'])
             predictions = get_predictions(country_dfs, country_models, is_exponential=parameters['parameters']['is_exponential'])
             evaluate_models(country_dfs, predictions, country_models, output_folder=output_folder)
             evaluate_models_cross_linear(country_dfs, country_models, output_folder=output_folder)
             create_plots(predictions, country_dfs, parameters['test_period'], parameters['forecast_horizon'], output_folder=output_folder)
+            calculate_recession_chances_linear(country_dfs, country_models, output_folder=output_folder)
         case _:
             raise ValueError(f"Model {parameters['model']} not recognized.")
     
