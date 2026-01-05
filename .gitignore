@@ -18,3 +18,5 @@ plots_*.png
 experiments/
 
 For Friday.txt
+fake_data_plots/
+storms_plots/
