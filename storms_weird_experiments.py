@@ -202,7 +202,7 @@ plt.legend()
 # mark covid-19 recession 2020-onwards
 plt.axvspan(2020, 2023, color='purple', alpha=0.3, label='2020 Covid-19 Recession')
 plt.legend()
-plt.savefig('storms_plots/USA_rdgpe_vs_employment.png')
+plt.savefig('storms_plots/USA_employment_graph.png')
 plt.close()
 
 # does not prove much, employment only very slightly drops during recessions, but not by much.
