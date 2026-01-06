@@ -16,13 +16,24 @@ print("Std dev rdgpe:", std_rdgpe)
 # generate synthetic rdgpe data for Fakedatalia
 np.random.seed(42)
 # make sure it doesn't go below 0
-synthetic_rdgpe = np.abs(np.random.normal(loc=mean_rdgpe, scale=std_rdgpe, size=len(years)))
+# create the data seperately for each year to avoid negative values and wild swings
+# make it generally increasing over time with some noise and around the mean
+
+synthetic_rdgpe = []
+current_value = mean_rdgpe * 0.5  # start below mean
+for year in years:
+    growth = np.random.normal(loc=mean_rdgpe * 0.03, scale=std_rdgpe * 0.01)  # average growth of 3% of mean rdgpe
+    noise = np.random.normal(loc=0, scale=std_rdgpe * 0.05)  # some noise
+    new_value = max(0, current_value + growth + noise)  # ensure non-negative
+    synthetic_rdgpe.append(new_value)
+    current_value = new_value
 synthetic_data = pd.DataFrame({
     'year': years,
-    'country': country, 
+    'country': "Fakedatalia",
     'countrycode': 'FDA',
     'rgdpe': synthetic_rdgpe
 })
+
 
 
 # plot the synthetic data, scale it without "1e6" notation
