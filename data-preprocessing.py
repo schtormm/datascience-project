@@ -11,10 +11,18 @@ def create_pct_change_features(df, columns, years=[1, 2, 3, 5, 10]):
     """Create percentage change features for specified columns over given years."""
     for col in columns:
         for year in years:
-            df[f'{col}_pct_change_{year}yr'] = df[col].pct_change(periods=year) * 100
+            df[f'{col}_pct_change_{year}yr'] = df[col].pct_change(periods=year)
 
     # Drop rows with NaN values resulting from percentage change calculations
     df = df.dropna().reset_index(drop=True)
+    return df
+
+def add_recession_classification(df):
+    """Add recession classification based on GDP growth."""
+    df['recession'] = (df['rgdpe_pct_change_1yr'] < 0).astype(int)
+    # Add recession last/next year classification
+    df['recession_last_year'] = df['recession'].shift(1).fillna(0).astype(int)
+    df['recession_next_year'] = df['recession'].shift(-1).fillna(0).astype(int)
     return df
 
 def normalize_values(df, columns):
@@ -47,5 +55,8 @@ if __name__ == "__main__":
 
     # Create percentage change features
     data_with_pct_changes = create_pct_change_features(data, columns_to_transform)
+    
+    # Add recession classification
+    data_with_pct_changes = add_recession_classification(data_with_pct_changes)
 
     save_data(data_with_pct_changes, 'data_with_pct_changes.csv')
