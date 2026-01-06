@@ -1,4 +1,5 @@
 import pandas as pd
+import matplotlib.pyplot as plt
 
 def load_data(file_path, countries, columns):
     """Load dataset and filter for specified countries."""
@@ -9,13 +10,20 @@ def load_data(file_path, countries, columns):
 
 def create_pct_change_features(df, columns, years=[1, 2, 3, 5, 10]):
     """Create percentage change features for specified columns over given years."""
+    new_columns = []
     for col in columns:
         for year in years:
             df[f'{col}_pct_change_{year}yr'] = df[col].pct_change(periods=year)
+            new_columns.append(f'{col}_pct_change_{year}yr')
+        
+    # Only use after 1970
+    df = df[df['year'] > 1970].reset_index(drop=True)
 
     # Drop rows with NaN values resulting from percentage change calculations
     df = df.dropna().reset_index(drop=True)
-    return df
+    
+    # Return dataframe and also the list of new columns created
+    return df, new_columns
 
 def add_recession_classification(df):
     """Add recession classification based on GDP growth."""
@@ -45,6 +53,30 @@ def save_data(df, file_path):
     """Save the processed DataFrame to a CSV file."""
     df.to_csv(file_path, index=False)
 
+def visualize_data(df, columns, folder='plots'):
+    """Visualize specified columns using line plots."""
+    import os
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+    else:
+        # Clear existing plots
+        for file in os.listdir(folder):
+            os.remove(os.path.join(folder, file))
+    
+    for col in columns:
+        plt.figure(figsize=(10, 6))
+        for country in df['countrycode'].unique():
+            country_data = df[df['countrycode'] == country]
+            plt.plot(country_data['year'], country_data[col], label=country)
+        
+        plt.title(f'Trend of {col} over Years')
+        plt.xlabel('Year')
+        plt.ylabel(col)
+        plt.legend()
+        plt.grid(True)
+        plt.savefig(os.path.join(folder, f'{col}_trend.png'))
+        plt.close()
+
 if __name__ == "__main__":
     countries_to_use = ["USA", "DNK", "NLD"]
     columns_to_use = ['rgdpe', 'emp', 'hc']
@@ -54,9 +86,11 @@ if __name__ == "__main__":
     data = load_data('cleaned_V11.csv', countries_to_use, columns_to_use)
 
     # Create percentage change features
-    data_with_pct_changes = create_pct_change_features(data, columns_to_transform)
+    data_with_pct_changes, new_columns = create_pct_change_features(data, columns_to_transform)
     
     # Add recession classification
     data_with_pct_changes = add_recession_classification(data_with_pct_changes)
+
+    visualize_data(data_with_pct_changes, new_columns)
 
     save_data(data_with_pct_changes, 'data_with_pct_changes.csv')
