@@ -35,18 +35,39 @@ def split_data_random(X, y, test_size=0.2, random_state=42):
     """Split the dataset into training and testing sets."""
     return train_test_split(X, y, test_size=test_size, random_state=random_state)
 
-def split_data_time_based(X, y, split_year, year_col='year'):
-    """Split the dataset into training and testing sets based on a year threshold."""
-    train_indices = X[year_col] < split_year
-    test_indices = X[year_col] >= split_year
+def time_split_by_year(df, feature_cols, target_col='recession_next_year', 
+                       train_end=2015, val_end=2019):
+    """
+    Splits a multi-country dataframe by calendar year into train, validation, and test sets.
+
+    Args:
+        df: feature-engineered dataframe
+        feature_cols: list of feature columns
+        target_col: target variable column
+        train_end: last year for training
+        val_end: last year for validation
+    Returns:
+        X_train, y_train, X_val, y_val, X_test, y_test
+    """
+    # Training set
+    train_df = df[df['year'] <= train_end]
+    X_train = train_df[feature_cols]
+    y_train = train_df[target_col]
+
+    # Validation set
+    val_df = df[(df['year'] > train_end) & (df['year'] <= val_end)]
+    X_val = val_df[feature_cols]
+    y_val = val_df[target_col]
+
+    # Test set
+    test_df = df[df['year'] > val_end]
+    X_test = test_df[feature_cols]
+    y_test = test_df[target_col]
+
+    print(f"Training samples: {len(train_df)}, Validation: {len(val_df)}, Test: {len(test_df)}")
     
-    X_train = X[train_indices].drop(columns=[year_col])
-    y_train = y[train_indices]
-    
-    X_test = X[test_indices].drop(columns=[year_col])
-    y_test = y[test_indices]
-    
-    return X_train, X_test, y_train, y_test
+    return X_train, y_train, X_val, y_val, X_test, y_test
+
 
 def create_model(X_train, y_train, model=RandomForestClassifier(class_weight='balanced', random_state=42)):
     """Create and train a simple classification model."""
@@ -269,6 +290,7 @@ def evaluate_classification_model(y_true, y_pred, y_pred_proba=None,
     
     return results
 
+
 def tune_xgboost(X_train, y_train, task='classification', search_method='grid', 
                  param_grid=None, n_iter=50, cv=5, scoring=None, n_jobs=-1, 
                  verbose=1, random_state=42):
@@ -316,7 +338,7 @@ def tune_xgboost(X_train, y_train, task='classification', search_method='grid',
         else:
             scale_pos_weight = None
 
-        base_model = XGBClassifier(random_state=random_state, eval_metric='aucpr', scale_pos_weight=min(scale_pos_weight, 2.5), n_estimators=1500)
+        base_model = XGBClassifier(random_state=random_state, eval_metric='aucpr', scale_pos_weight=scale_pos_weight, n_estimators=1500)
         if scoring is None:
             scoring = 'average_precision'
     elif task == 'regression':
@@ -390,7 +412,15 @@ if __name__ == "__main__":
     
     X, y = split_features_labels(data, feature_columns, label_column)
     # X_train, X_test, y_train, y_test = split_data_random(X, y)
-    X_train, X_test, y_train, y_test = split_data_time_based(X, y, split_year=2000, year_col='year')
+    # After feature engineering
+    X_train, y_train, X_val, y_val, X_test, y_test = time_split_by_year(
+        data,
+        feature_cols=feature_columns,
+        target_col='recession_next_year',
+        train_end=2015,
+        val_end=2019
+    )
+
 
     results = tune_xgboost(
         X_train, y_train, 
@@ -411,8 +441,12 @@ if __name__ == "__main__":
 
     final_model.fit(
         X_train,
-        y_train
+        y_train,
+        eval_set=[(X_val, y_val)]
     )
+
+    # ---- Threshold tuning on validation set ----
+    y_val_proba = final_model.predict_proba(X_val)[:, 1]
 
     test_score = final_model.score(X_test, y_test)
     print(f"\nTest set accuracy: {test_score:.4f}")
@@ -420,6 +454,7 @@ if __name__ == "__main__":
     # Get predictions
     y_pred = final_model.predict(X_test)
     y_pred_proba = final_model.predict_proba(X_test)
+
 
     # # Evaluate the model
     results = evaluate_classification_model(
