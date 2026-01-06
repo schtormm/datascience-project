@@ -21,7 +21,7 @@ def create_pct_change_features(df, columns, years=[1, 2, 3, 5, 10]):
 
     # Drop rows with NaN values resulting from percentage change calculations
     df = df.dropna().reset_index(drop=True)
-    
+
     # Return dataframe and also the list of new columns created
     return df, new_columns
 
@@ -90,6 +90,9 @@ if __name__ == "__main__":
     
     # Add recession classification
     data_with_pct_changes = add_recession_classification(data_with_pct_changes)
+
+    # Remove original columns
+    data_with_pct_changes = data_with_pct_changes.drop(columns=columns_to_use)
 
     visualize_data(data_with_pct_changes, new_columns)
 
