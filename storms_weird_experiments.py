@@ -144,9 +144,8 @@ plt.suptitle('Singular Spectrum Analysis of rdgpe Ranked by Frequency', fontsize
 plt.savefig('storms_plots/ssa_rdgpe_freq.png')
 plt.close()
 
-groups = {
-    'Trend': [1, 2]
-}
+# reconstruct trend 
+groups = {'Trend': list(range(0,3)), 'Seasonal': list(range(3,10)), 'Noise': list(range(10,37))}
 ssa.reconstruct(groups)
 
 # plot trend
@@ -206,3 +205,46 @@ plt.savefig('storms_plots/USA_employment_graph.png')
 plt.close()
 
 # does not prove much, employment only very slightly drops during recessions, but not by much.
+
+
+# try to do linear regression on rdgpe data for Netherlands
+from sklearn.linear_model import LinearRegression
+X = netherlands_data['year'].values.reshape(-1, 1)
+y = netherlands_data['rgdpe'].values
+
+# do log transformation to y to see if that helps
+y_log = np.log(y)
+model_linear = LinearRegression()
+linear_model = model_linear.fit(X, y)
+model_logarithmic = LinearRegression()
+logarithmic_model = model_logarithmic.fit(X, y_log)
+y_pred_linear = linear_model.predict(X)
+y_log_pred = logarithmic_model.predict(X)
+# exponentiate y_log_pred to get back to original scale
+y_log_pred_exp = np.exp(y_log_pred)
+
+# try to see what happens when you subtract both fits from original data
+plt.figure(figsize=(10,6))
+plt.plot(netherlands_data['year'], netherlands_data['rgdpe'], label='Original rdgpe', color='lightgray')
+plt.plot(netherlands_data['year'], y_pred_linear, label='Linear Regression Fit', color='red')
+plt.plot(netherlands_data['year'], y_log_pred_exp, label='Logarithmic Regression Fit', color='blue')
+plt.title('Linear Regression on rdgpe for Netherlands')
+plt.xlabel('Year')
+plt.gca().yaxis.get_major_formatter().set_scientific(False)
+plt.ylabel('rdgpe')
+plt.legend()
+plt.savefig('storms_plots/Netherlands_rdgpe_linear_regression.png')
+plt.close()
+
+# plot residuals of both models
+residuals_linear = y - y_pred_linear
+residuals_log = y - y_log_pred_exp
+plt.figure(figsize=(10,6))
+plt.scatter(netherlands_data['year'], residuals_linear, label='Linear Regression Residuals', color='red')
+plt.scatter(netherlands_data['year'], residuals_log, label='Logarithmic Regression Residuals', color='blue')
+plt.title('Residuals of Linear and Logarithmic Regression on rdgpe for Netherlands')
+plt.xlabel('Year')
+plt.gca().yaxis.get_major_formatter().set_scientific(False)
+plt.ylabel('Residuals')
+plt.legend()
+plt.savefig('storms_plots/Netherlands_rdgpe_regression_residuals.png')
