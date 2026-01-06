@@ -1,99 +1,137 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def load_data(file_path, countries, columns):
+def load_data(file_path, columns, countries = None):
     """Load dataset and filter for specified countries."""
     df = pd.read_csv(file_path)
-    df_filtered = df[df['countrycode'].isin(countries)].reset_index(drop=True)
+    if countries is not None:
+        df_filtered = df[df['countrycode'].isin(countries)].reset_index(drop=True)
+    else:
+        df_filtered = df
     df_filtered = df_filtered[['countrycode', 'year'] + columns]
     return df_filtered
 
-def create_pct_change_features(df, columns, years=[1, 2, 3, 5, 10]):
-    """Create percentage change features for specified columns over given years."""
-    new_columns = []
-    for col in columns:
-        for year in years:
-            df[f'{col}_pct_change_{year}yr'] = df[col].pct_change(periods=year)
-            new_columns.append(f'{col}_pct_change_{year}yr')
+def create_temporal_features(df, var_name, periods=[1, 2, 3, 5, 10]):
+    df = df.sort_values(['countrycode', 'year'])
+    
+    for period in periods:
+        col_name = f'{var_name}_pct_change_{period}y'
+        df[col_name] = df.groupby('countrycode')[var_name].pct_change(periods=period) * 100
+    
+    return df
+
+
+def create_acceleration_features(df, var_name):
+    df = df.sort_values(['countrycode', 'year'])
+    
+    # First difference of growth rate
+    growth_col = f'{var_name}_pct_change_1y'
+    if growth_col in df.columns:
+        df[f'{var_name}_acceleration'] = df.groupby('countrycode')[growth_col].diff()
+    
+    return df
+
+
+def create_relative_to_history_features(df, var_name, windows=[3, 5, 10]):
+    df = df.sort_values(['countrycode', 'year'])
+    
+    for window in windows:
+        # Z-score relative to rolling historical average
+        rolling_mean = df.groupby('countrycode')[var_name].transform(
+            lambda x: x.rolling(window=window, min_periods=window//2).mean()
+        )
+        rolling_std = df.groupby('countrycode')[var_name].transform(
+            lambda x: x.rolling(window=window, min_periods=window//2).std()
+        )
         
-    # Only use after 1970
-    df = df[df['year'] > 1970].reset_index(drop=True)
+        df[f'{var_name}_zscore_{window}y'] = (df[var_name] - rolling_mean) / rolling_std
+    
+    return df
 
-    # Drop rows with NaN values resulting from percentage change calculations
-    df = df.dropna().reset_index(drop=True)
 
-    # Return dataframe and also the list of new columns created
-    return df, new_columns
+def create_cross_country_features(df, var_name):
+    # Deviation from global mean that year
+    global_mean = df.groupby('year')[var_name].transform('mean')
+    df[f'{var_name}_vs_global'] = df[var_name] - global_mean
+    
+    # Percentile rank within year
+    df[f'{var_name}_percentile'] = df.groupby('year')[var_name].rank(pct=True) * 100
+    
+    return df
+
+
+def create_lagged_features(df, var_name, lags=[1, 2, 3]):
+    df = df.sort_values(['countrycode', 'year'])
+    
+    for lag in lags:
+        df[f'{var_name}_lag{lag}'] = df.groupby('countrycode')[var_name].shift(lag)
+    
+    return df
+
+
+def create_all_features(df, base_vars=['gdp', 'avg_hours', 'hc_index']):
+    df = df.copy()
+    df = df.sort_values(['countrycode', 'year']).reset_index(drop=True)
+    
+    print("Creating features...")
+    
+    for var in base_vars:
+        if var not in df.columns:
+            print(f"Warning: {var} not found in dataframe")
+            continue
+        
+        print(f"  Processing {var}...")
+        
+        # Temporal features (percent changes)
+        df = create_temporal_features(df, var, periods=[1, 2, 3, 5, 10])
+        
+        # Acceleration
+        df = create_acceleration_features(df, var)
+        
+        # Relative to country history
+        df = create_relative_to_history_features(df, var, windows=[3, 5, 10])
+        
+        # Cross-country comparisons
+        df = create_cross_country_features(df, var)
+        
+        # Lagged features
+        df = create_lagged_features(df, var, lags=[1, 2])
+
+    df = add_recession_classification(df)
+    
+    print("Feature engineering complete!")
+    print(f"Total columns: {len(df.columns)}")
+    
+    return df
 
 def add_recession_classification(df):
     """Add recession classification based on GDP growth."""
-    df['recession'] = (df['rgdpe_pct_change_1yr'] < 0).astype(int)
+    df['recession'] = (df['rgdpe_pct_change_1y'] < 0).astype(int)
     # Add recession last/next year classification
     df['recession_last_year'] = df['recession'].shift(1).fillna(0).astype(int)
     df['recession_next_year'] = df['recession'].shift(-1).fillna(0).astype(int)
     return df
 
-def normalize_values(df, columns):
-    """Normalize specified columns using min-max scaling."""
-    for col in columns:
-        min_val = df[col].min()
-        max_val = df[col].max()
-        df[col] = (df[col] - min_val) / (max_val - min_val)
-    return df
+def get_feature_columns(df, exclude_cols=['countrycode', 'year', 'recession']):
+    feature_cols = [col for col in df.columns if col not in exclude_cols]
+    return feature_cols
 
-def standardize_values(df, columns):
-    """Standardize specified columns to have mean 0 and standard deviation 1."""
-    for col in columns:
-        mean_val = df[col].mean()
-        std_val = df[col].std()
-        df[col] = (df[col] - mean_val) / std_val
-    return df
-
-def save_data(df, file_path):
-    """Save the processed DataFrame to a CSV file."""
-    df.to_csv(file_path, index=False)
-
-def visualize_data(df, columns, folder='plots'):
-    """Visualize specified columns using line plots."""
-    import os
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-    else:
-        # Clear existing plots
-        for file in os.listdir(folder):
-            os.remove(os.path.join(folder, file))
-    
-    for col in columns:
-        plt.figure(figsize=(10, 6))
-        for country in df['countrycode'].unique():
-            country_data = df[df['countrycode'] == country]
-            plt.plot(country_data['year'], country_data[col], label=country)
-        
-        plt.title(f'Trend of {col} over Years')
-        plt.xlabel('Year')
-        plt.ylabel(col)
-        plt.legend()
-        plt.grid(True)
-        plt.savefig(os.path.join(folder, f'{col}_trend.png'))
-        plt.close()
 
 if __name__ == "__main__":
-    countries_to_use = ["USA", "DNK", "NLD"]
-    columns_to_use = ['rgdpe', 'emp', 'hc']
-    columns_to_transform = ['rgdpe', 'emp', 'hc']
-    
-    # Load the dataset
-    data = load_data('cleaned_V11.csv', countries_to_use, columns_to_use)
+    countries_to_use = ["USA", "DNK", "NLD", "GBR", "JPN", "CAN", "AUS", "EGY", "BRA", "CHN"]
+    columns_to_use = ['rgdpe', 'avh', 'hc']
+    columns_to_transform = ['rgdpe', 'avh', 'hc']
 
-    # Create percentage change features
-    data_with_pct_changes, new_columns = create_pct_change_features(data, columns_to_transform)
-    
-    # Add recession classification
-    data_with_pct_changes = add_recession_classification(data_with_pct_changes)
+    # Load data
+    df = load_data('cleaned_V11.csv', columns=columns_to_use)
 
-    # Remove original columns
-    data_with_pct_changes = data_with_pct_changes.drop(columns=columns_to_use)
+    df_features = create_all_features(df, base_vars=['rgdpe', 'avh', 'hc'])
 
-    visualize_data(data_with_pct_changes, new_columns)
+    # Get feature columns for modeling
+    feature_cols = get_feature_columns(df_features, exclude_cols=['countrycode', 'year'])
 
-    save_data(data_with_pct_changes, 'data_with_pct_changes.csv')
+    # Delete rows with NaN values resulting from feature engineering
+    df_features = df_features.dropna().reset_index(drop=True)
+
+    # save to CSV for inspection
+    df_features.to_csv('engineered_features_all_countries.csv', index=False)
