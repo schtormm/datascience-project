@@ -1,4 +1,4 @@
-year,country_code, note
+year,country_code,note
 1974,GBR,""
 1975,GBR,""
 1980,GBR,""
@@ -25,4 +25,10 @@ year,country_code, note
 2009,NLD,"Great Recession"
 2020,USA,"COVID-19 Pandemic"
 2020,NLD,"COVID-19 Pandemic"
-
+2014,BRA,"Brazilian economic crisis"
+2015,BRA,"Brazilian economic crisis"
+2016,BRA,"Brazilian economic crisis"
+2020,BRA,"COVID-19 Pandemic"
+2008,BRA,"Great Recession"
+2009,BRA,"Great Recession"
+1985,BRA,"Latin American debt crisis"
