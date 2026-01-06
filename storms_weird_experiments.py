@@ -37,6 +37,28 @@ plt.axvspan(2020, 2023, color='purple', alpha=0.3, label='2020 Covid-19 Recessio
 plt.savefig('storms_plots/netherlands_rdgpe_differenced.png')
 
 
+# second order differencing
+df['rgdpe_diff2'] = df.groupby('country')['rgdpe_diff'].diff()
+# plot second order differenced data for Netherlands
+netherlands_diff2 = df[df['country'] == 'Netherlands'][['year', 'rgdpe_diff2']]
+plt.figure(figsize=(10,6))
+plt.plot(netherlands_diff2['year'], netherlands_diff2['rgdpe_diff2'], label='Netherlands 2nd Order Differenced')
+plt.title('2nd Order Differenced rdgpe for Netherlands')
+plt.xlabel('Year')
+plt.ylabel('2nd Order Differenced rdgpe')
+plt.xlabel('Year')
+plt.ylabel('Differenced rdgpe')
+# mark 2007-2009 financial crisis
+plt.axvspan(2007, 2009, color='red', alpha=0.3, label='2008-2009 Financial Crisis')
+# mark oil crisis 1973
+plt.axvspan(1973, 1974, color='orange', alpha=0.3, label='1973 Oil Crisis')
+# mark dotcom bubble 2000-2001
+plt.axvspan(2000, 2001, color='green', alpha=0.3, label='2000-2001 Dotcom Bubble')
+plt.legend()
+# mark covid-19 recession 2020-onwards
+plt.axvspan(2020, 2023, color='purple', alpha=0.3, label='2020 Covid-19 Recession')
+plt.savefig('storms_plots/NL_rdgpe_doubledifferenced.png')
+plt.close()
 
 
 # try to fit ARIMA on differenced data for Netherlands
@@ -79,6 +101,8 @@ plt.legend()
 plt.axvspan(2020, 2023, color='purple', alpha=0.3, label='2020 Covid-19 Recession')
 plt.savefig('storms_plots/USA_rdgpe_differenced.png')
 
+# try second order differencing for Netherlands
+
 
 # try log differencing
 df['rgdpe_log'] = np.log(df['rgdpe'])
@@ -99,6 +123,8 @@ plt.legend()
 # mark covid-19 recession 2020-onwards
 plt.axvspan(2020, 2023, color='purple', alpha=0.3, label='2020 Covid-19 Recession')
 plt.savefig('storms_plots/Netherlands_rdgpe_log_differenced.png')
+
+
 
 
 ssa = SingularSpectrumAnalysis(df[df['country']=='Netherlands']['rgdpe'])
