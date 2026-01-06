@@ -184,3 +184,25 @@ decomposed_diff.plot()
 plt.suptitle('Seasonal Decomposition of Differenced rdgpe for Netherlands', fontsize=16)
 plt.savefig('storms_plots/Netherlands_rdgpe_differenced_decomposition.png')
 plt.close()
+
+# compare employment to rdgpe for United States
+df_nl = df[df['country'] == 'United States'][['year', 'rgdpe', 'emp']]
+plt.figure(figsize=(10,6))
+plt.plot(df_nl['year'], df_nl['emp'] * 1e6, label='Employment (millions)', color='orange')
+plt.title('Employment graph for USA') 
+plt.xlabel('Year')
+plt.ylabel('Employment (millions)')
+plt.gca().yaxis.get_major_formatter().set_scientific(False)
+plt.axvspan(2007, 2009, color='red', alpha=0.3, label='2008-2009 Financial Crisis')
+# mark oil crisis 1973
+plt.axvspan(1973, 1975, color='orange', alpha=0.3, label='1973-1975 Oil Crisis')
+# mark dotcom bubble 2000-2001
+plt.axvspan(2000, 2001, color='green', alpha=0.3, label='2000-2001 Dotcom Bubble')
+plt.legend()
+# mark covid-19 recession 2020-onwards
+plt.axvspan(2020, 2023, color='purple', alpha=0.3, label='2020 Covid-19 Recession')
+plt.legend()
+plt.savefig('storms_plots/USA_rdgpe_vs_employment.png')
+plt.close()
+
+# does not prove much, employment only very slightly drops during recessions, but not by much.
