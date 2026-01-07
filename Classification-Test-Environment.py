@@ -361,7 +361,7 @@ def tune_xgboost(X_train, y_train, task='classification', search_method='grid',
             'reg_lambda': [1, 1.5, 2]
         }
     
-    tscv = TimeSeriesSplit(n_splits=5)
+    tscv = TimeSeriesSplit(n_splits=cv)
     # Choose search method
     if search_method == 'grid':
         search = GridSearchCV(
@@ -417,10 +417,12 @@ if __name__ == "__main__":
         data,
         feature_cols=feature_columns,
         target_col='recession_next_year',
-        train_end=2015,
-        val_end=2019
+        train_end=2010,
+        val_end=2015
     )
 
+    X_train = pd.concat([X_train, X_val], axis=0)
+    y_train = pd.concat([y_train, y_val], axis=0)
 
     results = tune_xgboost(
         X_train, y_train, 
@@ -441,12 +443,8 @@ if __name__ == "__main__":
 
     final_model.fit(
         X_train,
-        y_train,
-        eval_set=[(X_val, y_val)]
+        y_train
     )
-
-    # ---- Threshold tuning on validation set ----
-    y_val_proba = final_model.predict_proba(X_val)[:, 1]
 
     test_score = final_model.score(X_test, y_test)
     print(f"\nTest set accuracy: {test_score:.4f}")
