@@ -36,43 +36,26 @@ def split_data_random(X, y, test_size=0.2, random_state=42):
     return train_test_split(X, y, test_size=test_size, random_state=random_state)
 
 def time_split_by_year(df, feature_cols, target_col='recession_next_year', 
-                       train_end=2015, val_end=2019, remove_year=False):
-    """
-    Splits a multi-country dataframe by calendar year into train, validation, and test sets.
+                       train_end=2015, test_end=2021, remove_year=False):
+    """Split the dataset into training, and testing sets based on year."""
 
-    Args:
-        df: feature-engineered dataframe
-        feature_cols: list of feature columns
-        target_col: target variable column
-        train_end: last year for training
-        val_end: last year for validation
-    Returns:
-        X_train, y_train, X_val, y_val, X_test, y_test
-    """
     # Training set
     train_df = df[df['year'] <= train_end]
     X_train = train_df[feature_cols]
     y_train = train_df[target_col]
 
-    # Validation set
-    val_df = df[(df['year'] > train_end) & (df['year'] <= val_end)]
-    X_val = val_df[feature_cols]
-    y_val = val_df[target_col]
-
     # Test set
-    test_df = df[df['year'] > val_end]
+    test_df = df[df['year'] > test_end]
     X_test = test_df[feature_cols]
     y_test = test_df[target_col]
 
     if remove_year:
         X_train = X_train.drop(columns=['year'])
-        X_val = X_val.drop(columns=['year'])
         X_test = X_test.drop(columns=['year'])
 
-    print(f"Training samples: {len(train_df)}, Validation: {len(val_df)}, Test: {len(test_df)}")
+    print(f"Training samples: {len(train_df)}, Test: {len(test_df)}")
     
-    return X_train, y_train, X_val, y_val, X_test, y_test
-
+    return X_train, y_train, X_test, y_test
 
 def create_model(X_train, y_train, model=RandomForestClassifier(class_weight='balanced', random_state=42)):
     """Create and train a simple classification model."""
@@ -377,7 +360,10 @@ def tune_xgboost(X_train, y_train, task='classification', search_method='grid',
             'reg_lambda': [1, 1.5, 2]
         }
     
-    tscv = TimeSeriesSplit(n_splits=cv)
+    if cv > 1 and cv is not None:
+        tscv = TimeSeriesSplit(n_splits=cv)
+    else:
+        tscv = None
     # Choose search method
     if search_method == 'grid':
         search = GridSearchCV(
@@ -461,35 +447,31 @@ def show_model_predictions(model, x, y_true, year_removed=True):
 
 if __name__ == "__main__":
     data = import_data('engineered_features_all_countries.csv')
-    feature_columns = [col for col in data.columns if col not in ['countrycode', 'rgdpe_pct_change_1y', 'recession', 'recession_last_year', 'recession_next_year']]
+    feature_columns = [col for col in data.columns if col not in ['countrycode', 'years_since_start', 'recession', 'recession_last_year', 'recession_next_year']]
     label_column = 'recession_next_year'
     remove_year = True
-    
 
     param_grid = {
         'max_depth': [3, 5, 7],
         'learning_rate': [0.05, 0.1],
         'subsample': [0.8, 1.0],
         'colsample_bytree': [0.8, 1.0],
-        'min_child_weight': [3, 5],      # Higher values for stability
+        'min_child_weight': [3, 5],
         'gamma': [0, 0.1],
         'reg_alpha': [0, 0.1],
         'reg_lambda': [1, 1.5]
     }
-    # X, y = split_features_labels(data, feature_columns, label_column)
-    # X_train, X_test, y_train, y_test = split_data_random(X, y)
+    X, y = split_features_labels(data, feature_columns, label_column)
+    X_train, X_test, y_train, y_test = split_data_random(X, y)
     # After feature engineering
-    X_train, y_train, X_val, y_val, X_test, y_test = time_split_by_year(
-        data,
-        feature_cols=feature_columns,
-        target_col='recession_next_year',
-        train_end=2010,
-        val_end=2015,
-        remove_year=remove_year,
-    )
-
-    X_train = pd.concat([X_train, X_val], axis=0)
-    y_train = pd.concat([y_train, y_val], axis=0)
+    # X_train, y_train, X_test, y_test = time_split_by_year(
+    #     data,
+    #     feature_cols=feature_columns,
+    #     target_col='recession_next_year',
+    #     train_end=2000,
+    #     test_end=2010,
+    #     remove_year=remove_year,
+    # )
 
     results = tune_xgboost(
         X_train, y_train, 
@@ -497,8 +479,7 @@ if __name__ == "__main__":
         search_method='random',
         n_iter=10,
         scoring=average_precision_score,
-        cv=3,
-        param_grid=param_grid,
+        cv=5,
     )
 
     best_params = results['best_params']

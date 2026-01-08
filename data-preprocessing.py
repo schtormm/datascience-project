@@ -115,13 +115,29 @@ def scale_features(df, feature_cols):
 
 
 if __name__ == "__main__":
-    countries_to_use = ["USA","DNK","NLD","GBR","JPN","CAN","AUS","EGY","BRA","CHN"]
-    columns_to_use = ['rgdpe']
-    use_recession_file = False  # Set to True if using external recession data
+    use_all_countries = True
+    if use_all_countries:
+        countries_to_use = None  # Use all countries in the dataset
+    else:
+        countries_to_use = ["USA","DNK","NLD","GBR","JPN","CAN","AUS","EGY","BRA","CHN"]
+
+    columns_to_use = ['rgdpe', 'emp', 'avh', 'ck', 'csh_i', 'rtfpna', 'csh_c']
+
+    use_recession_file = False  # Whether to use external recession data
     recession_file = 'recessions.csv'  # Path to recession data file if used
+
+    # Get recession countries
+    if use_recession_file:
+        recession_data = pd.read_csv(recession_file)
+        recession_countries = recession_data['country_code'].unique().tolist()
+        if countries_to_use is not None:
+            countries_to_use = [c for c in countries_to_use if c in recession_countries]
+        else:
+            countries_to_use = recession_countries
+
     
     # Load data with minimum history enforced
-    df = load_data('cleaned_V11.csv', columns=columns_to_use, min_history=12)
+    df = load_data('cleaned_V11.csv', countries=countries_to_use, columns=columns_to_use, min_history=12)
     
     # Create features
     df_features = create_all_features(df, base_vars=columns_to_use, remove_originals=True, recessions=recession_file, use_recession_file=use_recession_file)
