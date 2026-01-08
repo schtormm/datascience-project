@@ -17,7 +17,7 @@ from statsmodels.graphics.api import qqplot
 from statsmodels.graphics.tsaplots import plot_predict
 from statsmodels.tsa.arima.model import ARIMA
 
-dataset = 'cleaned_V11.csv'
+dataset = 'cleaned_V11_with_synthetic.csv'
 
 # mute sklearn warnings
 import warnings
@@ -55,7 +55,7 @@ def get_parameters(filename = 'parameters.json'):
             parameters = json.load(f)
     except FileNotFoundError:
         print(f"Parameter file {filename} not found. Using default parameters.")
-        parameters = {'country_codes': ['USA', 'DNK', 'NLD'], 
+        parameters = {'country_codes': ['USA', 'DNK', 'NLD', "FDA"], 
                       'test_period': [1950, 2000],
                       'forecast_horizon': 10,
                       'model': 'ARIMA',
@@ -415,7 +415,7 @@ def create_plots(predictions, country_dfs, timerange, forecast_horizon, output_f
         print(f"Plot saved for {country}")
 
 if __name__ == "__main__":
-    parameters_filename = 'parameters_linear.json'  # Change this to switch parameter files
+    parameters_filename = 'parameters.json'  # Change this to switch parameter files
 
     output_folder = output_folder_setup(parameters_filename)
     parameters = get_parameters(parameters_filename)

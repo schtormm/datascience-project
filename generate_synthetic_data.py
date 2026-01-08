@@ -34,6 +34,13 @@ synthetic_data = pd.DataFrame({
     'rgdpe': synthetic_rdgpe
 })
 
+# add to original dataframe
+df = pd.concat([df, synthetic_data])
+# save to new csv
+df.to_csv('cleaned_V11_with_synthetic.csv', index=False)
+
+
+
 
 
 # plot the synthetic data, scale it without "1e6" notation
