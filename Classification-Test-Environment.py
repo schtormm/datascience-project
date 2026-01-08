@@ -36,7 +36,7 @@ def split_data_random(X, y, test_size=0.2, random_state=42):
     return train_test_split(X, y, test_size=test_size, random_state=random_state)
 
 def time_split_by_year(df, feature_cols, target_col='recession_next_year', 
-                       train_end=2015, val_end=2019):
+                       train_end=2015, val_end=2019, remove_year=False):
     """
     Splits a multi-country dataframe by calendar year into train, validation, and test sets.
 
@@ -63,6 +63,11 @@ def time_split_by_year(df, feature_cols, target_col='recession_next_year',
     test_df = df[df['year'] > val_end]
     X_test = test_df[feature_cols]
     y_test = test_df[target_col]
+
+    if remove_year:
+        X_train = X_train.drop(columns=['year'])
+        X_val = X_val.drop(columns=['year'])
+        X_test = X_test.drop(columns=['year'])
 
     print(f"Training samples: {len(train_df)}, Validation: {len(val_df)}, Test: {len(test_df)}")
     
@@ -258,7 +263,8 @@ def evaluate_classification_model(y_true, y_pred, y_pred_proba=None,
     file_paths = {
         'confusion_matrix': os.path.join(output_dir, f'{model_name}_confusion_matrix_{timestamp}.png'),
         'classification_report': os.path.join(output_dir, f'{model_name}_classification_report_{timestamp}.txt'),
-        'metrics_json': os.path.join(output_dir, f'{model_name}_metrics_{timestamp}.json')
+        'metrics_json': os.path.join(output_dir, f'{model_name}_metrics_{timestamp}.json'),
+        'predictions_csv': os.path.join(output_dir, f'{model_name}_predictions_{timestamp}.csv')
     }
     
     # Generate confusion matrix
@@ -269,6 +275,16 @@ def evaluate_classification_model(y_true, y_pred, y_pred_proba=None,
     report_dict = save_classification_report(y_true, y_pred, class_names, model_name, 
                                             timestamp, file_paths['classification_report'])
     results['classification_report'] = report_dict
+
+    # Save predictions
+    pred_df = pd.DataFrame({
+        'true_label': y_true,
+        'predicted_label': y_pred
+    })
+    if y_pred_proba is not None:
+        for i, class_label in enumerate(class_names):
+            pred_df[f'prob_{class_label}'] = y_pred_proba[:, i]
+    pred_df.to_csv(file_paths['predictions_csv'], index=False)
     
     # Generate ROC and PR curves for binary classification
     if y_pred_proba is not None and is_binary:
@@ -355,7 +371,7 @@ def tune_xgboost(X_train, y_train, task='classification', search_method='grid',
             'learning_rate': [0.01, 0.05, 0.1, 0.3],
             'subsample': [0.6, 0.8, 1.0],
             'colsample_bytree': [0.6, 0.8, 1.0],
-            'min_child_weight': [1, 3, 5],
+            'min_child_weight': [3, 5],
             'gamma': [0, 0.1, 0.3],
             'reg_alpha': [0, 0.1, 1],
             'reg_lambda': [1, 1.5, 2]
@@ -405,12 +421,62 @@ def tune_xgboost(X_train, y_train, task='classification', search_method='grid',
     
     return results
 
+def show_feature_importance(model, feature_names, top_n=20):
+    """Display the top N feature importances from the model."""
+    importances = model.feature_importances_
+    print(importances)
+    print(feature_names)
+    feature_importance_df = pd.DataFrame({
+        'feature': feature_names,
+        'importance': importances
+    })
+    feature_importance_df = feature_importance_df.sort_values(by='importance', ascending=False).head(top_n)
+    
+    plt.figure(figsize=(10, 6))
+    sns.barplot(x='importance', y='feature', data=feature_importance_df, palette='viridis')
+    plt.title('Top Feature Importances')
+    plt.xlabel('Importance Score')
+    plt.ylabel('Feature')
+    plt.tight_layout()
+    plt.show()
+
+def show_model_predictions(model, x, y_true, year_removed=True):
+    """Show model predictions alongside true labels."""
+    X = x
+    y_pred = model.predict(X)
+    if not year_removed:
+        results_df = pd.DataFrame({
+            'year': x['year'],
+            'True Label': y_true,
+            'Predicted Label': y_pred
+        })
+    else:
+        results_df = pd.DataFrame({
+            'True Label': y_true,
+            'Predicted Label': y_pred
+        })
+    results_df['Correct'] = results_df['True Label'] == results_df['Predicted Label']
+    # export to CSV
+    results_df.to_csv('model_predictions.csv', index=False)
+
 if __name__ == "__main__":
     data = import_data('engineered_features_all_countries.csv')
-    feature_columns = [col for col in data.columns if col not in ['countrycode', 'recession_next_year']]
+    feature_columns = [col for col in data.columns if col not in ['countrycode', 'rgdpe_pct_change_1y', 'recession', 'recession_last_year', 'recession_next_year']]
     label_column = 'recession_next_year'
+    remove_year = True
     
-    X, y = split_features_labels(data, feature_columns, label_column)
+
+    param_grid = {
+        'max_depth': [3, 5, 7],
+        'learning_rate': [0.05, 0.1],
+        'subsample': [0.8, 1.0],
+        'colsample_bytree': [0.8, 1.0],
+        'min_child_weight': [3, 5],      # Higher values for stability
+        'gamma': [0, 0.1],
+        'reg_alpha': [0, 0.1],
+        'reg_lambda': [1, 1.5]
+    }
+    # X, y = split_features_labels(data, feature_columns, label_column)
     # X_train, X_test, y_train, y_test = split_data_random(X, y)
     # After feature engineering
     X_train, y_train, X_val, y_val, X_test, y_test = time_split_by_year(
@@ -418,7 +484,8 @@ if __name__ == "__main__":
         feature_cols=feature_columns,
         target_col='recession_next_year',
         train_end=2010,
-        val_end=2015
+        val_end=2015,
+        remove_year=remove_year,
     )
 
     X_train = pd.concat([X_train, X_val], axis=0)
@@ -429,7 +496,9 @@ if __name__ == "__main__":
         task='classification',
         search_method='random',
         n_iter=10,
-        scoring=average_precision_score
+        scoring=average_precision_score,
+        cv=3,
+        param_grid=param_grid,
     )
 
     best_params = results['best_params']
@@ -463,3 +532,17 @@ if __name__ == "__main__":
         base_output_dir='experiments',
         model_name='XGBoost_example'
     )
+
+    # # save model
+    import joblib
+    joblib.dump(final_model, 'xgboost_recession_model.pkl')
+    
+    # Load model
+    # final_model = joblib.load('xgboost_recession_model.pkl')
+
+    if remove_year:
+        feature_columns.remove('year')
+
+    # Show feature importance
+    show_model_predictions(final_model, X_test, y_test, year_removed=remove_year)
+    show_feature_importance(final_model, feature_columns, top_n=20)

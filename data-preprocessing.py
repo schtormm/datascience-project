@@ -68,7 +68,7 @@ def create_lagged_features(df, var_name, lags=[1,2,3]):
         df[f'{var_name}_lag{lag}'] = df.groupby('countrycode')[var_name].shift(lag)
     return df
 
-def create_all_features(df, base_vars=['gdp','avg_hours','hc'], remove_originals=False):
+def create_all_features(df, base_vars=['gdp','avg_hours','hc'], remove_originals=False, recessions=None, use_recession_file=False):
     df = df.copy().sort_values(['countrycode','year']).reset_index(drop=True)
     print("Creating features...")
     
@@ -83,15 +83,23 @@ def create_all_features(df, base_vars=['gdp','avg_hours','hc'], remove_originals
         df = create_cross_country_features(df, var)
         df = create_lagged_features(df, var, lags=[1,2])
     
-    df = add_recession_classification(df)
+    df = add_recession_classification(df, recessions=recessions, use_file=use_recession_file)
     if remove_originals:
         df = df.drop(columns=base_vars)
     print("Feature engineering complete!")
     print(f"Total columns: {len(df.columns)}")
     return df
 
-def add_recession_classification(df):
-    df['recession'] = (df['rgdpe_pct_change_1y'] < 0).astype(int)
+def add_recession_classification(df, recessions=None, use_file=False):
+    if use_file and recessions is not None:
+        recession_df = pd.read_csv(recessions)
+        recession_df = recession_df[['year','country_code']]
+        recession_df['recession'] = 1
+        df = df.merge(recession_df, left_on=['year','countrycode'], right_on=['year','country_code'], how='left')
+        df['recession'] = df['recession'].fillna(0).astype(int)
+        df = df.drop(columns=['country_code'])
+    else:
+        df['recession'] = (df['rgdpe_pct_change_1y'] < 0).astype(int)
     df['recession_last_year'] = df['recession'].shift(1).fillna(0).astype(int)
     df['recession_next_year'] = df['recession'].shift(-1).fillna(0).astype(int)
     return df
@@ -108,13 +116,15 @@ def scale_features(df, feature_cols):
 
 if __name__ == "__main__":
     countries_to_use = ["USA","DNK","NLD","GBR","JPN","CAN","AUS","EGY","BRA","CHN"]
-    columns_to_use = ['rgdpe','avh','hc']
+    columns_to_use = ['rgdpe']
+    use_recession_file = False  # Set to True if using external recession data
+    recession_file = 'recessions.csv'  # Path to recession data file if used
     
     # Load data with minimum history enforced
     df = load_data('cleaned_V11.csv', columns=columns_to_use, min_history=12)
     
     # Create features
-    df_features = create_all_features(df, base_vars=['rgdpe','avh','hc'], remove_originals=True)
+    df_features = create_all_features(df, base_vars=columns_to_use, remove_originals=True, recessions=recession_file, use_recession_file=use_recession_file)
     
     # Get feature columns
     feature_cols = get_feature_columns(df_features, exclude_cols=['countrycode', 'year', 'years_since_start', 'recession_next_year', 'recession', 'recession_last_year'])
