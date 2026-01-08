@@ -13,6 +13,7 @@ from scipy import stats
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import (mean_absolute_percentage_error,
                              mean_squared_error, root_mean_squared_error)
+from sklearn.model_selection import GridSearchCV
 from statsmodels.graphics.api import qqplot
 from statsmodels.graphics.tsaplots import plot_predict
 from statsmodels.tsa.arima.model import ARIMA
@@ -414,8 +415,39 @@ def create_plots(predictions, country_dfs, timerange, forecast_horizon, output_f
         plt.close()
         print(f"Plot saved for {country}")
 
+
+# def grid_search_best_ARIMA(country_dfs):
+#     p_values = [0, 1, 2, 4, 6, 8, 10]
+#     d_values = range(0, 3)
+#     q_values = range(0, 3)
+#     best_orders = {}
+#    # use gridsearchcv from sklearn to find best arima order for each country
+#     for country, data in country_dfs.items():
+#         series = data['train']._append(data['test'])
+#         best_aic = float("inf")
+#         best_order = None
+#         print(f"Starting grid search for {country}")
+#         # use gridsearchcv from sklearn to find best arima order for each country
+#         for p in p_values:
+#             for d in d_values:
+#                 for q in q_values:
+#                     order = (p, d, q)
+#                     try:
+#                         model = ARIMA(series, order=order)
+#                         model_fit = model.fit()
+#                         aic = model_fit.aic
+#                         if aic < best_aic:
+#                             best_aic = aic
+#                             best_order = order
+#                     except Exception as e:
+#                         print(f"Warning: ARIMA{order} model fitting failed for {country}: {e}")
+#                         continue
+#         best_orders[country] = {'Best ARIMA Order': best_order, 'Best AIC': format(best_aic, '.4f')}
+#     best_orders_df = pd.DataFrame.from_dict(best_orders, orient='index')
+#     best_orders_df.to_csv('best_arima_orders.csv')
+
 if __name__ == "__main__":
-    parameters_filename = 'parameters.json'  # Change this to switch parameter files
+    parameters_filename = 'parameters_from_gridsearch.json'  # Change this to switch parameter files
 
     output_folder = output_folder_setup(parameters_filename)
     parameters = get_parameters(parameters_filename)
@@ -428,6 +460,7 @@ if __name__ == "__main__":
             predictions = get_predictions(country_dfs, country_models, forecast_horizon=parameters['forecast_horizon'])
             # print(predictions)
             create_plots_arima(predictions, country_dfs, parameters['test_period'], parameters['forecast_horizon'], output_folder=output_folder)
+            # grid_search_best_ARIMA(country_dfs)
             evaluate_models(country_dfs, predictions, 'ARIMA', output_folder=output_folder)
             evaluate_models_cross_ARIMA(country_dfs, country_models, output_folder=output_folder)
             calculate_recession_chances(country_dfs, country_models, output_folder=output_folder)

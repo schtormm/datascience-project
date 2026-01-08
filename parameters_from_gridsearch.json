@@ -1,0 +1,14 @@
+{
+  "country_codes": ["USA", "DNK", "NLD", "FDA"],
+  "test_period": [1950, 2000],
+  "forecast_horizon": 10,
+  "model": "ARIMA",
+  "parameters": {
+    "orders": [
+      [1, 2, 1],
+      [2, 2, 2],
+      [4, 2, 1],
+      [0, 2, 1]
+    ]
+  }
+}
