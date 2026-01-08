@@ -1,3 +1,4 @@
+import joblib
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold, TimeSeriesSplit, train_test_split
 
@@ -445,6 +446,20 @@ def show_model_predictions(model, x, y_true, year_removed=True):
     # export to CSV
     results_df.to_csv('model_predictions.csv', index=False)
 
+def test_model_with_handpicked_data(model, label_column, feature_columns, handpicked_data):
+    """Test the model with handpicked data points."""
+    test_df = pd.DataFrame(handpicked_data)
+    X_test = test_df[feature_columns]
+    y_pred = model.predict(X_test)
+    y_pred_proba = model.predict_proba(X_test)
+    test_df['Predicted Label'] = y_pred
+    for i in range(y_pred_proba.shape[1]):
+        test_df[f'Prob_Class_{i}'] = y_pred_proba[:, i]
+
+    results = test_df[['countrycode', 'year', label_column, 'Predicted Label'] + [f'Prob_Class_{i}' for i in range(y_pred_proba.shape[1])]]
+    
+    results.to_csv('model_predictions.csv', index=False)
+
 if __name__ == "__main__":
     data = import_data('engineered_features_all_countries.csv')
     feature_columns = [col for col in data.columns if col not in ['countrycode', 'years_since_start', 'recession', 'recession_last_year', 'recession_next_year']]
@@ -473,57 +488,68 @@ if __name__ == "__main__":
     #     remove_year=remove_year,
     # )
 
-    results = tune_xgboost(
-        X_train, y_train, 
-        task='classification',
-        search_method='random',
-        n_iter=10,
-        scoring=average_precision_score,
-        cv=5,
-    )
 
-    best_params = results['best_params']
+    option = 'handpicked'  # Options: 'train', 'predict', 'handpicked', 'feature_importance'
 
-    final_model = XGBClassifier(
-        random_state=42,
-        eval_metric='aucpr',
-        n_estimators=3000,
-        **best_params
-    )
+    if option == 'train':
 
-    final_model.fit(
-        X_train,
-        y_train
-    )
+        results = tune_xgboost(
+            X_train, y_train, 
+            task='classification',
+            search_method='random',
+            n_iter=10,
+            scoring=average_precision_score,
+            cv=5,
+        )
 
-    test_score = final_model.score(X_test, y_test)
-    print(f"\nTest set accuracy: {test_score:.4f}")
+        best_params = results['best_params']
 
-    # Get predictions
-    y_pred = final_model.predict(X_test)
-    y_pred_proba = final_model.predict_proba(X_test)
+        final_model = XGBClassifier(
+            random_state=42,
+            eval_metric='aucpr',
+            n_estimators=3000,
+            **best_params
+        )
+
+        final_model.fit(
+            X_train,
+            y_train
+        )
+
+        test_score = final_model.score(X_test, y_test)
+        print(f"\nTest set accuracy: {test_score:.4f}")
+
+        # Get predictions
+        y_pred = final_model.predict(X_test)
+        y_pred_proba = final_model.predict_proba(X_test)
 
 
-    # # Evaluate the model
-    results = evaluate_classification_model(
-        y_true=y_test,
-        y_pred=y_pred,
-        y_pred_proba=y_pred_proba,
-        class_names=['No Recession', 'Recession'],
-        base_output_dir='experiments',
-        model_name='XGBoost_example'
-    )
+        # # Evaluate the model
+        results = evaluate_classification_model(
+            y_true=y_test,
+            y_pred=y_pred,
+            y_pred_proba=y_pred_proba,
+            class_names=['No Recession', 'Recession'],
+            base_output_dir='experiments',
+            model_name='XGBoost_example'
+        )
 
-    # # save model
-    import joblib
-    joblib.dump(final_model, 'xgboost_recession_model.pkl')
-    
-    # Load model
-    # final_model = joblib.load('xgboost_recession_model.pkl')
+        # # save model
+        joblib.dump(final_model, 'xgboost_recession_model.pkl')
+    elif option == 'predict':
+        # Load model
+        final_model = joblib.load('xgboost_recession_model.pkl')
+        show_model_predictions(final_model, X_test, y_test, year_removed=remove_year)
+    elif option == 'handpicked':
+        # Load model
+        final_model = joblib.load('xgboost_recession_model.pkl')
+        handpicked_data = import_data('test_set.csv')
+        test_model_with_handpicked_data(final_model, label_column, feature_columns, handpicked_data)
+    elif option == 'feature_importance':
+        # Load model
+        final_model = joblib.load('xgboost_recession_model.pkl')
+        if remove_year:
+            feature_columns.remove('year')
 
-    if remove_year:
-        feature_columns.remove('year')
-
-    # Show feature importance
-    show_model_predictions(final_model, X_test, y_test, year_removed=remove_year)
-    show_feature_importance(final_model, feature_columns, top_n=20)
+        # Show feature importance
+        show_feature_importance(final_model, feature_columns, top_n=20)
