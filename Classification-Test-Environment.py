@@ -476,21 +476,29 @@ if __name__ == "__main__":
         'reg_alpha': [0, 0.1],
         'reg_lambda': [1, 1.5]
     }
-    X, y = split_features_labels(data, feature_columns, label_column)
-    X_train, X_test, y_train, y_test = split_data_random(X, y)
-    # After feature engineering
-    # X_train, y_train, X_test, y_test = time_split_by_year(
-    #     data,
-    #     feature_cols=feature_columns,
-    #     target_col='recession_next_year',
-    #     train_end=2000,
-    #     test_end=2010,
-    #     remove_year=remove_year,
-    # )
 
 
-    option = 'handpicked'  # Options: 'train', 'predict', 'handpicked', 'feature_importance'
+    option = 'train'  # Options: 'train', 'predict', 'handpicked', 'feature_importance'
 
+    data_split= 'random'  # Options: 'random', 'time_based'
+
+    if data_split == 'random':
+        # Remove year column if specified
+        if remove_year and 'year' in feature_columns:
+            feature_columns.remove('year')
+
+        X, y = split_features_labels(data, feature_columns, label_column)
+        X_train, X_test, y_train, y_test = split_data_random(X, y)
+    elif data_split == 'time_based':
+        X_train, y_train, X_test, y_test = time_split_by_year(
+            data,
+            feature_cols=feature_columns,
+            target_col='recession_next_year',
+            train_end=2000,
+            test_end=2010,
+            remove_year=remove_year,
+        )
+    
     if option == 'train':
 
         results = tune_xgboost(
@@ -499,7 +507,7 @@ if __name__ == "__main__":
             search_method='random',
             n_iter=10,
             scoring=average_precision_score,
-            cv=5,
+            cv=1,
         )
 
         best_params = results['best_params']

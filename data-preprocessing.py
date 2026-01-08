@@ -3,13 +3,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 import joblib
 
-def load_data(file_path, columns, countries=None, min_history=12):
+def load_data(file_path, columns, countries=None, min_history=12, status=None):
     """Load dataset, filter countries, and enforce minimum history."""
     df = pd.read_csv(file_path)
     
     if countries is not None:
         df = df[df['countrycode'].isin(countries)].reset_index(drop=True)
     
+    if status is not None:
+        status_df = pd.read_csv('all_countries.csv')
+        filtered_countries = status_df[status_df['status'].isin(status)]['country_code'].tolist()
+        df = df[df['countrycode'].isin(filtered_countries)].reset_index(drop=True)
+
     df = df[['countrycode', 'year'] + columns]
     
     # Enforce minimum history per country
@@ -151,7 +156,7 @@ if __name__ == "__main__":
     recession_file = 'recessions.csv'  # Path to recession data file if used
     
     # Load data with minimum history enforced
-    df = load_data('cleaned_V11.csv', countries=countries_to_use, columns=columns_to_use, min_history=12)
+    df = load_data('cleaned_V11.csv', countries=countries_to_use, columns=columns_to_use, min_history=12, status=['Developed', 'Developing', 'Least Developed'])
     
     # Create features
     df_features = create_all_features(df, base_vars=columns_to_use, remove_originals=True)

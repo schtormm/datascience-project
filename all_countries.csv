@@ -1,0 +1,186 @@
+country_code,country_name,status
+ABW,Aruba,Developed
+AGO,Angola,Developing
+AIA,Anguilla,Developed
+ALB,Albania,Developing
+ARE,United Arab Emirates,Developed
+ARG,Argentina,Developing
+ARM,Armenia,Developing
+ATG,Antigua and Barbuda,Developing
+AUS,Australia,Developed
+AUT,Austria,Developed
+AZE,Azerbaijan,Developing
+BDI,Burundi,Least Developed
+BEL,Belgium,Developed
+BEN,Benin,Least Developed
+BFA,Burkina Faso,Least Developed
+BGD,Bangladesh,Least Developed
+BGR,Bulgaria,Developing
+BHR,Bahrain,Developed
+BHS,Bahamas,Developing
+BIH,Bosnia and Herzegovina,Developing
+BLR,Belarus,Developing
+BLZ,Belize,Developing
+BMU,Bermuda,Developed
+BOL,Bolivia,Developing
+BRA,Brazil,Developing
+BRB,Barbados,Developing
+BRN,Brunei,Developing
+BTN,Bhutan,Developing
+BWA,Botswana,Developing
+CAF,Central African Republic,Least Developed
+CAN,Canada,Developed
+CHE,Switzerland,Developed
+CHL,Chile,Developing
+CHN,China,Developing
+CIV,Côte d'Ivoire,Developing
+CMR,Cameroon,Developing
+COD,Democratic Republic of Congo,Least Developed
+COG,Republic of Congo,Developing
+COL,Colombia,Developing
+COM,Comoros,Least Developed
+CPV,Cape Verde,Developing
+CRI,Costa Rica,Developing
+CUW,Curaçao,Developing
+CYM,Cayman Islands,Developed
+CYP,Cyprus,Developed
+CZE,Czechia,Developed
+DEU,Germany,Developed
+DJI,Djibouti,Least Developed
+DMA,Dominica,Developing
+DNK,Denmark,Developed
+DOM,Dominican Republic,Developing
+DZA,Algeria,Developing
+ECU,Ecuador,Developing
+EGY,Egypt,Developing
+ESP,Spain,Developed
+EST,Estonia,Developed
+ETH,Ethiopia,Least Developed
+FIN,Finland,Developed
+FJI,Fiji,Developing
+FRA,France,Developed
+GAB,Gabon,Developing
+GBR,United Kingdom,Developed
+GEO,Georgia,Developing
+GHA,Ghana,Developing
+GIN,Guinea,Developing
+GMB,Gambia,Least Developed
+GNB,Guinea-Bissau,Least Developed
+GNQ,Equatorial Guinea,Developing
+GRC,Greece,Developed
+GRD,Grenada,Developing
+GTM,Guatemala,Developing
+GUY,Guyana,Developing
+HKG,Hong Kong,Developed
+HND,Honduras,Developing
+HRV,Croatia,Developed
+HTI,Haiti,Least Developed
+HUN,Hungary,Developing
+IDN,Indonesia,Developing
+IND,India,Developing
+IRL,Ireland,Developed
+IRN,Iran,Developing
+IRQ,Iraq,Developing
+ISL,Iceland,Developed
+ISR,Israel,Developed
+ITA,Italy,Developed
+JAM,Jamaica,Developing
+JOR,Jordan,Developing
+JPN,Japan,Developed
+KAZ,Kazakhstan,Developing
+KEN,Kenya,Developing
+KGZ,Kyrgyzstan,Developing
+KHM,Cambodia,Developing
+KNA,Saint Kitts and Nevis,Developing
+KOR,South Korea,Developed
+KWT,Kuwait,Developed
+LAO,Laos,Least Developed
+LBN,Lebanon,Developing
+LBR,Liberia,Least Developed
+LCA,Saint Lucia,Developing
+LKA,Sri Lanka,Developing
+LSO,Lesotho,Least Developed
+LTU,Lithuania,Developed
+LUX,Luxembourg,Developed
+LVA,Latvia,Developed
+MAC,Macao,Developing
+MAR,Morocco,Developing
+MDA,Moldova,Developing
+MDG,Madagascar,Least Developed
+MDV,Maldives,Developing
+MEX,Mexico,Developing
+MKD,North Macedonia,Developing
+MLI,Mali,Least Developed
+MLT,Malta,Developed
+MMR,Myanmar,Least Developed
+MNE,Montenegro,Developing
+MNG,Mongolia,Developing
+MOZ,Mozambique,Least Developed
+MRT,Mauritania,Least Developed
+MSR,Montserrat,Developing
+MUS,Mauritius,Developing
+MWI,Malawi,Least Developed
+MYS,Malaysia,Developing
+NAM,Namibia,Developing
+NER,Niger,Least Developed
+NGA,Nigeria,Developing
+NIC,Nicaragua,Developing
+NLD,Netherlands,Developed
+NOR,Norway,Developed
+NPL,Nepal,Least Developed
+NZL,New Zealand,Developed
+OMN,Oman,Developed
+PAK,Pakistan,Developing
+PAN,Panama,Developing
+PER,Peru,Developing
+PHL,Philippines,Developing
+POL,Poland,Developed
+PRT,Portugal,Developed
+PRY,Paraguay,Developing
+PSE,Palestine,Developing
+QAT,Qatar,Developed
+ROU,Romania,Developing
+RUS,Russia,Developing
+RWA,Rwanda,Least Developed
+SAU,Saudi Arabia,Developed
+SDN,Sudan,Least Developed
+SEN,Senegal,Least Developed
+SGP,Singapore,Developed
+SLE,Sierra Leone,Least Developed
+SLV,El Salvador,Developing
+SOM,Somalia,Least Developed
+SRB,Serbia,Developing
+SSD,South Sudan,Least Developed
+STP,São Tomé and Príncipe,Least Developed
+SUR,Suriname,Developing
+SVK,Slovakia,Developed
+SVN,Slovenia,Developed
+SWE,Sweden,Developed
+SWZ,Eswatini,Developing
+SXM,Sint Maarten,Developing
+SYC,Seychelles,Developing
+SYR,Syria,Developing
+TCA,Turks and Caicos Islands,Developing
+TCD,Chad,Least Developed
+TGO,Togo,Least Developed
+THA,Thailand,Developing
+TJK,Tajikistan,Developing
+TKM,Turkmenistan,Developing
+TTO,Trinidad and Tobago,Developing
+TUN,Tunisia,Developing
+TUR,Turkey,Developing
+TWN,Taiwan,Developed
+TZA,Tanzania,Least Developed
+UGA,Uganda,Least Developed
+UKR,Ukraine,Developing
+URY,Uruguay,Developing
+USA,United States,Developed
+UZB,Uzbekistan,Developing
+VCT,Saint Vincent and the Grenadines,Developing
+VEN,Venezuela,Developing
+VGB,British Virgin Islands,Developing
+VNM,Vietnam,Developing
+YEM,Yemen,Least Developed
+ZAF,South Africa,Developing
+ZMB,Zambia,Least Developed
+ZWE,Zimbabwe,Developing

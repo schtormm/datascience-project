@@ -1,0 +1,20 @@
+Currently using the following fields:
+'rgdpe': Real GDP measured using the expenditure approach, at constant prices and purchasing power parity (PPP).
+'emp': Total number of people employed in the economy (in millions).
+'ck': Capital stock at constant prices
+'csh_i': Investment share of GDP
+'rtfpna': Real total factor productivity (TFP) {captures efficiency over technology}
+'csh_c': Share of household consumption in GDP
+
+With the following modifications:
+pct_change (over 1, 2, 3, 5, 10 years): How much the value has changed from ... years ago
+acceleration: The change in percentage change between consecutive periods
+zscore (over 3, 5 & 10 years)
+vs_global: the value compared to the global mean
+percentile: percentile rank within each year
+lag (1, 2, 3 years): values from the past (1, 2 or 3) year(s)
+
+When year is added to training, results will be slightly better
+
+Using Developed & Developing countries: The results are slightly better for both
+But when adding Least Developed: Results are worse
