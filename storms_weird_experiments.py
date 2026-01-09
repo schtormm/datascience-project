@@ -1,12 +1,15 @@
-import pandas as pd 
-import numpy as np
-import statsmodels as sm
-import matplotlib.pyplot as plt
-from statsmodels.tsa.seasonal import seasonal_decompose
-import statsmodels.api as sm_api
-from statsmodels.tsa.arima.model import ARIMA
-from ssalib import SingularSpectrumAnalysis
 import os
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import statsmodels as sm
+import statsmodels.api as sm_api
+from ssalib import SingularSpectrumAnalysis
+from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.seasonal import seasonal_decompose
+from statsmodels.tsa.stattools import adfuller
 
 df = pd.read_csv('cleaned_V11.csv')
 # create folder "storms_plots" if it doesn't exist
@@ -14,6 +17,25 @@ if not os.path.exists('storms_plots'):
     os.makedirs('storms_plots')
 else:
     print("Directory 'storms_plots' already exists.")
+
+
+# plot rdgpe for Netherlands
+netherlands_data = df[df['country'] == 'Netherlands'][['year', 'rgdpe']]
+# convert rdgpe to 2021 USD instead of 2021 USD millions
+netherlands_data['rgdpe'] = netherlands_data['rgdpe'] / 1e6;
+plt.figure(figsize=(10,6))
+plt.plot(netherlands_data['year'], netherlands_data['rgdpe'], label='RDGPE (in millons of 2021 USD)', color='blue')
+plt.title('RGDPE for the Netherlands, 1950-2023')
+plt.xlabel('Year')
+plt.gca().yaxis.get_major_formatter().set_scientific(False)
+# mark 2007-2009 financial crisis
+plt.axvspan(2007, 2009, color='red', alpha=0.3, label='2008-2009 Financial Crisis')
+plt.ylabel('RGDPE (in trillions of 2021 USD)')
+plt.savefig('storms_plots/netherlands_rdgpe.png')
+plt.close()
+
+
+
 
 
 #try to remove the trend from country data using differencing
@@ -36,29 +58,17 @@ plt.legend()
 plt.axvspan(2020, 2023, color='purple', alpha=0.3, label='2020 Covid-19 Recession')
 plt.savefig('storms_plots/netherlands_rdgpe_differenced.png')
 
+# do ADF test on differenced data for Netherlands
+
+
+
+
+
 
 # second order differencing
-df['rgdpe_diff2'] = df.groupby('country')['rgdpe_diff'].diff()
+
 # plot second order differenced data for Netherlands
-netherlands_diff2 = df[df['country'] == 'Netherlands'][['year', 'rgdpe_diff2']]
-plt.figure(figsize=(10,6))
-plt.plot(netherlands_diff2['year'], netherlands_diff2['rgdpe_diff2'], label='Netherlands 2nd Order Differenced')
-plt.title('2nd Order Differenced rdgpe for Netherlands')
-plt.xlabel('Year')
-plt.ylabel('2nd Order Differenced rdgpe')
-plt.xlabel('Year')
-plt.ylabel('Differenced rdgpe')
-# mark 2007-2009 financial crisis
-plt.axvspan(2007, 2009, color='red', alpha=0.3, label='2008-2009 Financial Crisis')
-# mark oil crisis 1973
-plt.axvspan(1973, 1974, color='orange', alpha=0.3, label='1973 Oil Crisis')
-# mark dotcom bubble 2000-2001
-plt.axvspan(2000, 2001, color='green', alpha=0.3, label='2000-2001 Dotcom Bubble')
-plt.legend()
-# mark covid-19 recession 2020-onwards
-plt.axvspan(2020, 2023, color='purple', alpha=0.3, label='2020 Covid-19 Recession')
-plt.savefig('storms_plots/NL_rdgpe_doubledifferenced.png')
-plt.close()
+
 
 
 # try to fit ARIMA on differenced data for Netherlands
@@ -107,6 +117,109 @@ plt.savefig('storms_plots/USA_rdgpe_differenced.png')
 # try log differencing
 df['rgdpe_log'] = np.log(df['rgdpe'])
 df['rgdpe_log_diff'] = df.groupby('country')['rgdpe_log'].diff()
+
+
+netherlands_diff_clean = netherlands_diff['rgdpe_diff'].dropna()
+adf_result = adfuller(netherlands_diff_clean)
+print('ADF Statistic for Netherlands Differenced rdgpe: %f' % adf_result[0])
+print('p-value: %f' % adf_result[1])
+print('Critical Values:')
+for key, value in adf_result[4].items():
+    print('\t%s: %.3f' % (key, value))  
+
+# do ADF test on log differenced data for Netherlands
+netherlands_log_diff_clean = df[df['country'] == 'Netherlands']['rgdpe_log_diff'].dropna()
+adf_result_log = adfuller(netherlands_log_diff_clean)
+print('ADF Statistic for Netherlands Log Differenced rdgpe: %f' % adf_result_log[0])
+print('p-value: %f' % adf_result_log[1])
+print('Critical Values:')
+for key, value in adf_result_log[4].items():
+    print('\t%s: %.3f' % (key, value))
+
+df['rgdpe_diff2'] = df.groupby('country')['rgdpe_diff'].diff()
+# do adf test on second order differenced data for Netherlands
+netherlands_diff2_clean = df[df['country'] == 'Netherlands']['rgdpe_diff2'].dropna()
+adf_result2 = adfuller(netherlands_diff2_clean)
+print('ADF Statistic for Netherlands 2nd Order Differenced rdgpe: %f' % adf_result2[0])
+print('p-value: %f' % adf_result2[1])
+print('Critical Values:')
+for key, value in adf_result2[4].items():
+    print('\t%s: %.3f' % (key, value))
+
+netherlands_diff2 = df[df['country'] == 'Netherlands'][['year', 'rgdpe_diff2']]
+plt.figure(figsize=(10,6))
+plt.plot(netherlands_diff2['year'], netherlands_diff2['rgdpe_diff2'], label='Netherlands 2nd Order Differenced')
+plt.title('2nd Order Differenced rdgpe for Netherlands')
+plt.xlabel('Year')
+plt.ylabel('2nd Order Differenced rdgpe')
+plt.xlabel('Year')
+plt.ylabel('Differenced rdgpe')
+# mark 2007-2009 financial crisis
+plt.axvspan(2007, 2009, color='red', alpha=0.3, label='2008-2009 Financial Crisis')
+# mark oil crisis 1973
+plt.axvspan(1973, 1974, color='orange', alpha=0.3, label='1973 Oil Crisis')
+# mark dotcom bubble 2000-2001
+plt.axvspan(2000, 2001, color='green', alpha=0.3, label='2000-2001 Dotcom Bubble')
+plt.legend()
+# mark covid-19 recession 2020-onwards
+plt.axvspan(2020, 2023, color='purple', alpha=0.3, label='2020 Covid-19 Recession')
+plt.savefig('storms_plots/NL_rdgpe_doubledifferenced.png')
+plt.close()
+
+
+#plot acf and pacf of second order differenced data for Netherlands
+fig, ax = plt.subplots(2,1, figsize=(10,8))
+plot_acf(netherlands_diff2_clean, ax=ax[0], lags=30)
+plot_pacf(netherlands_diff2_clean, ax=ax[1], lags=30)
+plt.suptitle('ACF and PACF of 2nd Order Differenced rdgpe for Netherlands', fontsize=16)
+plt.savefig('storms_plots/netherlands_rdgpe_2ndorder_differenced_acf_pacf.png')
+plt.close()
+
+    
+#do adf test on 2nd order log differenced data for Netherlands
+df['rgdpe_log_diff2'] = df.groupby('country')['rgdpe_log_diff'].diff()
+netherlands_log_diff2_clean = df[df['country'] == 'Netherlands']['rgdpe_log_diff2'].dropna()
+adf_result_log2 = adfuller(netherlands_log_diff2_clean)
+print('ADF Statistic for Netherlands 2nd Order Log Differenced rdgpe: %f' % adf_result_log2[0])
+print('p-value: %f' % adf_result_log2[1])
+print('Critical Values:')
+for key, value in adf_result_log2[4].items():
+    print('\t%s: %.3f' % (key, value))
+
+# plot acf and pacf of 2nd order log differenced data for Netherlands
+fig, ax = plt.subplots(2,1, figsize=(10,8))
+plot_acf(netherlands_log_diff2_clean, ax=ax[0], lags=30)
+plot_pacf(netherlands_log_diff2_clean, ax=ax[1], lags=30)
+plt.suptitle('ACF and PACF of 2nd Order Log Differenced rdgpe for Netherlands', fontsize=16)
+plt.savefig('storms_plots/netherlands_rdgpe_2ndorder_log_differenced_acf_pacf.png')
+plt.close()
+
+# plot acf and pacf for original data for Netherlands
+fig, ax = plt.subplots(2,1, figsize=(10,8))
+plot_acf(netherlands_data['rgdpe'], ax=ax[0], lags=30)
+plot_pacf(netherlands_data['rgdpe'], ax=ax[1], lags=30)
+plt.suptitle('ACF and PACF of rdgpe for Netherlands (raw data)', fontsize=16)
+plt.savefig('storms_plots/netherlands_rdgpe_acf_pacf.png')
+
+# do acf and pacf plot of differenced data for Netherlands
+fig, ax = plt.subplots(2,1, figsize=(10,8))
+plot_acf(netherlands_diff_clean, ax=ax[0], lags=30)
+plot_pacf(netherlands_diff_clean, ax=ax[1], lags=30)
+plt.suptitle('ACF and PACF of Differenced rdgpe for Netherlands', fontsize=16)
+plt.savefig('storms_plots/netherlands_rdgpe_differenced_acf_pacf.png')
+plt.close()
+
+# plot acf and pacf of random walk data for comparison
+random_walk = np.cumsum(np.random.normal(size=len(netherlands_data)))
+fig, ax = plt.subplots(2,1, figsize=(10,8))
+plot_acf(random_walk, ax=ax[0], lags=30)
+plot_pacf(random_walk, ax=ax[1], lags=30)
+plt.suptitle('ACF and PACF of Random Walk Data', fontsize=16)
+plt.savefig('storms_plots/random_walk_acf_pacf.png')
+plt.close()
+
+
+
 # plot log differenced data for Netherlands
 netherlands_log_diff = df[df['country'] == 'Netherlands'][['year', 'rgdpe_log_diff']]
 plt.figure(figsize=(10,6))
@@ -209,6 +322,7 @@ plt.close()
 
 # try to do linear regression on rdgpe data for Netherlands
 from sklearn.linear_model import LinearRegression
+
 X = netherlands_data['year'].values.reshape(-1, 1)
 y = netherlands_data['rgdpe'].values
 
