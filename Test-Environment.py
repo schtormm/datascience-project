@@ -59,6 +59,7 @@ def get_parameters(filename = 'parameters.json'):
         parameters = {'country_codes': ['USA', 'DNK', 'NLD', "FDA"], 
                       'test_period': [1950, 2000],
                       'forecast_horizon': 10,
+                      'gdp_used': 'original',
                       'model': 'ARIMA',
                       "parameters": {
                         "orders": [[2, 1, 2], [2, 1, 3], [3, 1, 2], [3, 1, 3], [1, 2, 1]]
@@ -71,7 +72,11 @@ def create_dataset(countries, test_period, forecast_horizon, dataset):
     country_dfs = {}
     print("Creating datasets for countries:", countries)
     for country in countries:
-        country_data = df[df['countrycode'] == country].set_index('year')['rgdpe']
+        country_data = df[df['countrycode'] == country].set_index('year')
+        if parameters['gdp_used'] == 'log':
+            country_data = np.log(country_data['rgdpe'])  # use log differenced data
+        else:
+            country_data = country_data['rgdpe']  # use original data
         train = country_data[(country_data.index >= test_period[0]) & (country_data.index < test_period[1])]
         test = country_data[(country_data.index >= test_period[1]) & (country_data.index < test_period[1] + forecast_horizon)]
         country_dfs[country] = {'train': train, 'test': test}
@@ -182,7 +187,8 @@ def evaluate_models(country_dfs, predictions, used_model = None, output_folder='
         }
         mean_row = pd.DataFrame([mean_metrics], index=['Mean'])
         eval_df = pd.concat([eval_df, mean_row])
-            
+
+
     eval_df.to_csv(f'{output_folder}/evaluation_metrics.csv')
 
 
@@ -224,8 +230,30 @@ def evaluate_models_cross_ARIMA(country_dfs, models, output_folder='experiments'
                     'MAPE (mean of all splits)': format(np.mean(mape_list), '.4f')
                 })
    
+    
     eval_df = pd.DataFrame.from_dict(evaluation_metrics_cross, orient='index')
     eval_df.to_csv(f'{output_folder}/evaluation_metrics_cross.csv')
+    return evaluation_metrics_cross
+
+def plot_cross_validation_metrics(evaluations, country_selected, output_folder='experiments'):
+# structure of evaluations: {'NLD': [{'ARIMA Order': (0, 2, 1), 'MSE (mean of all splits)': '5139060320960578.0000', 'RMSE (mean of all splits)': '63190155.9782', 'MAPE (mean of all splits)': '73.4265'}, {'ARIMA Order': (0, 1, 2), 'MSE (mean of all splits)': '9396657797.6879', 'RMSE (mean of all splits)': '88038.7607', 'MAPE (mean of all splits)': '0.0907'}, {'ARIMA Order': (1, 1, 2), 'MSE (mean of all splits)': '534138314185439.1250', 'RMSE (mean of all splits)': '19322941.8541', 'MAPE (mean of all splits)': '22.0743'}, {'ARIMA Order': (1, 1, 1), 'MSE (mean of all splits)': '557582581558194.3125', 'RMSE (mean of all splits)': '18317088.9401', 'MAPE (mean of all splits)': '18.7109'}], 'USA': [{'ARIMA Order': (0, 2, 1), 'MSE (mean of all splits)': '938634279453573760.0000', 'RMSE (mean of all splits)': '905223097.0657', 'MAPE (mean of all splits)': '55.4171'}, {'ARIMA Order': (0, 1, 2), 'MSE (mean of all splits)': '4741184495046.0908', 'RMSE (mean of all splits)': '2040980.7849', 'MAPE (mean of all splits)': '0.1061'}, {'ARIMA Order': (1, 1, 2), 'MSE (mean of all splits)': '277680960530111808.0000', 'RMSE (mean of all splits)': '502324514.9220', 'MAPE (mean of all splits)': '30.4347'}, {'ARIMA Order': (1, 1, 1), 'MSE (mean of all splits)': '283061481707473984.0000', 'RMSE (mean of all splits)': '495424030.9519', 'MAPE (mean of all splits)': '29.1191'}], 'DNK': [{'ARIMA Order': (0, 2, 1), 'MSE (mean of all splits)': '232327943631333.2500', 'RMSE (mean of all splits)': '13074476.2503', 'MAPE (mean of all splits)': '48.8148'}, {'ARIMA Order': (0, 1, 2), 'MSE (mean of all splits)': '1136164800.6028', 'RMSE (mean of all splits)': '31290.1654', 'MAPE (mean of all splits)': '0.0960'}, {'ARIMA Order': (1, 1, 2), 'MSE (mean of all splits)': '37590141818218.3359', 'RMSE (mean of all splits)': '4743567.5512', 'MAPE (mean of all splits)': '15.3009'}, {'ARIMA Order': (1, 1, 1), 'MSE (mean of all splits)': '40975052880050.6328', 'RMSE (mean of all splits)': '4925223.4265', 'MAPE (mean of all splits)': '15.7489'}]}    orders = [model['ARIMA Order'] for model in evaluations[country_selected]]
+    orders = [model['ARIMA Order'] for model in evaluations[country_selected]]
+    rmses = [float(model['RMSE (mean of all splits)']) for model in evaluations[country_selected]]
+    mapes = [float(model['MAPE (mean of all splits)']) for model in evaluations[country_selected]]
+    # separate plots for RMSE and MAPE
+    fig, ax = plt.subplots(2, 1, figsize=(10, 10))
+    ax[0].bar([str(order) for order in orders], rmses, color='skyblue')
+    ax[0].set_title(f'Cross-Validation RMSE for {country_selected}')
+    ax[0].set_xlabel('ARIMA Order')
+    ax[0].set_ylabel('RMSE')
+    ax[1].bar([str(order) for order in orders], mapes, color='salmon')
+    ax[1].set_title(f'Cross-Validation MAPE for {country_selected}')
+    ax[1].set_xlabel('ARIMA Order')
+    ax[1].set_ylabel('MAPE')
+    plt.tight_layout()
+    plt.show()
+
+
 
 def evaluate_models_cross_linear(country_dfs, models, output_folder='experiments'):
     evaluation_metrics_cross_linear = {}
@@ -298,20 +326,21 @@ def create_plots_arima(predictions, country_dfs, timerange, forecast_horizon, ou
             
             # Plot forecast and observed data
             axs[i].plot(forecast_index, forecast, label=f'Forecast ARIMA{order}', linestyle='--')
+            
             # Concatenate train and test for continuous line
             observed_data = pd.concat([country_dfs[country]['train'], country_dfs[country]['test']])
             observed_data.plot(ax=axs[i], label='Observed Data', color='blue')
             # Highlight test portion
             country_dfs[country]['test'].plot(ax=axs[i], label='Actual Data', color='red', linewidth=2)
-
+    
             # make sure plot only shows from 2000 onwards
             axs[i].set_xlim([timerange[0], timerange[1] + forecast_horizon])
             # get rid of 1e6 notation on y-axis
             axs[i].ticklabel_format(style='plain', axis='y')
             # add title and labels
-            axs[i].set_title(f'ARIMA{order} Forecast of rgdpe for {country}')
+            axs[i].set_title(f'ARIMA{order} Forecast of {parameters["gdp_used"]} rgdpe for {country}')
             axs[i].set_xlabel('Year')
-            axs[i].set_ylabel('Real GDP (in millions)')
+            axs[i].set_ylabel(f'{"log of" if parameters["gdp_used"] == "log" else ""} Real GDP (in millions)')
             axs[i].legend()
             i +=1
         # Save the plot to a file
@@ -462,7 +491,8 @@ if __name__ == "__main__":
             create_plots_arima(predictions, country_dfs, parameters['test_period'], parameters['forecast_horizon'], output_folder=output_folder)
             # grid_search_best_ARIMA(country_dfs)
             evaluate_models(country_dfs, predictions, 'ARIMA', output_folder=output_folder)
-            evaluate_models_cross_ARIMA(country_dfs, country_models, output_folder=output_folder)
+            evaluations = evaluate_models_cross_ARIMA(country_dfs, country_models, output_folder=output_folder)
+            plot_cross_validation_metrics(evaluations, parameters['country_codes'][0], output_folder=output_folder)
             calculate_recession_chances(country_dfs, country_models, output_folder=output_folder)
         case 'Linear Regression':
             country_models = create_models_linear(country_dfs, parameters['parameters'])
