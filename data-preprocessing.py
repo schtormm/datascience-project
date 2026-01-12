@@ -156,7 +156,7 @@ if __name__ == "__main__":
     recession_file = 'recessions.csv'  # Path to recession data file if used
     
     # Load data with minimum history enforced
-    df = load_data('cleaned_V11.csv', countries=countries_to_use, columns=columns_to_use, min_history=12, status=['Developed', 'Developing', 'Least Developed'])
+    df = load_data('cleaned_V11.csv', countries=countries_to_use, columns=columns_to_use, min_history=12, status=['Least Developed'])
     
     # Create features
     df_features = create_all_features(df, base_vars=columns_to_use, remove_originals=True)
@@ -169,10 +169,10 @@ if __name__ == "__main__":
     
     # Scale features and save scaler
     df_features, fitted_scaler = scale_features(df_features, feature_cols)
-    
-    # # Save the scaler for later use
-    # joblib.dump(fitted_scaler, 'feature_scaler.pkl')
-    # print("Scaler saved to 'feature_scaler.pkl'")
+
+    # Save the scaler for later use
+    joblib.dump(fitted_scaler, 'feature_scaler.pkl')
+    print("Scaler saved to 'feature_scaler.pkl'")
     
     # # Also save feature column names for reference
     # joblib.dump(feature_cols, 'feature_columns.pkl')

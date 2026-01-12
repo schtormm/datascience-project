@@ -211,18 +211,35 @@ def get_next_experiment_number(base_dir):
     return max(experiment_numbers) + 1 if experiment_numbers else 1
 
 
-def evaluate_classification_model(y_true, y_pred, y_pred_proba=None, 
-                                   class_names=None, base_output_dir='Experiments',
-                                   model_name='classifier'):
-    # Setup directory structure: Experiments/{Date}/experiment_N
+def create_experiment_directory(base_output_dir='Experiments'):
     date_str = datetime.now().strftime('%Y-%m-%d')
     date_dir = os.path.join(base_output_dir, date_str)
     
-    # Get next experiment number
     exp_num = get_next_experiment_number(date_dir)
     output_dir = os.path.join(date_dir, f'experiment_{exp_num}')
     
     os.makedirs(output_dir, exist_ok=True)
+    
+    return output_dir, exp_num
+
+def get_experiment_directory(base_output_dir='Experiments', date_str=None, exp_num=None):
+    if date_str is None:
+        date_str = datetime.now().strftime('%Y-%m-%d')
+    date_dir = os.path.join(base_output_dir, date_str)
+    
+    if exp_num is None:
+        exp_num = get_next_experiment_number(date_dir) - 1
+    
+    output_dir = os.path.join(date_dir, f'experiment_{exp_num}')
+    
+    if not os.path.exists(output_dir):
+        raise FileNotFoundError(f"Experiment directory {output_dir} does not exist.")
+    
+    return output_dir, exp_num
+
+def evaluate_classification_model(y_true, y_pred, y_pred_proba=None, 
+                                   class_names=None, output_dir = 'Experiments', exp_num=None,
+                                   model_name='classifier'):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     
     # Determine class names
@@ -408,7 +425,7 @@ def tune_xgboost(X_train, y_train, task='classification', search_method='grid',
     
     return results
 
-def show_feature_importance(model, feature_names, top_n=20):
+def save_feature_importance(model, feature_names, top_n=20, output_path='feature_importance.png'):
     """Display the top N feature importances from the model."""
     importances = model.feature_importances_
     print(importances)
@@ -425,9 +442,10 @@ def show_feature_importance(model, feature_names, top_n=20):
     plt.xlabel('Importance Score')
     plt.ylabel('Feature')
     plt.tight_layout()
-    plt.show()
+    plt.savefig(output_path, dpi=300)
+    plt.close()
 
-def show_model_predictions(model, x, y_true, year_removed=True):
+def show_model_predictions(model, x, y_true, year_removed=True, output_path='model_predictions.csv'):
     """Show model predictions alongside true labels."""
     X = x
     y_pred = model.predict(X)
@@ -444,9 +462,9 @@ def show_model_predictions(model, x, y_true, year_removed=True):
         })
     results_df['Correct'] = results_df['True Label'] == results_df['Predicted Label']
     # export to CSV
-    results_df.to_csv('model_predictions.csv', index=False)
+    results_df.to_csv(output_path, index=False)
 
-def test_model_with_handpicked_data(model, label_column, feature_columns, handpicked_data):
+def test_model_with_handpicked_data(model, label_column, feature_columns, handpicked_data, output_path='model_predictions.csv'):
     """Test the model with handpicked data points."""
     test_df = pd.DataFrame(handpicked_data)
     X_test = test_df[feature_columns]
@@ -458,7 +476,9 @@ def test_model_with_handpicked_data(model, label_column, feature_columns, handpi
 
     results = test_df[['countrycode', 'year', label_column, 'Predicted Label'] + [f'Prob_Class_{i}' for i in range(y_pred_proba.shape[1])]]
     
-    results.to_csv('model_predictions.csv', index=False)
+    results.to_csv(output_path, index=False)
+
+
 
 if __name__ == "__main__":
     data = import_data('engineered_features_all_countries.csv')
@@ -479,6 +499,9 @@ if __name__ == "__main__":
 
 
     option = 'train'  # Options: 'train', 'predict', 'handpicked', 'feature_importance'
+
+    exp_date = None # Set to None to use today's date
+    exp_number = None           # Set to None to use the latest experiment number
 
     data_split= 'random'  # Options: 'random', 'time_based'
 
@@ -531,6 +554,7 @@ if __name__ == "__main__":
         y_pred = final_model.predict(X_test)
         y_pred_proba = final_model.predict_proba(X_test)
 
+        output_dir, exp_number = create_experiment_directory(base_output_dir='experiments')
 
         # # Evaluate the model
         results = evaluate_classification_model(
@@ -538,26 +562,34 @@ if __name__ == "__main__":
             y_pred=y_pred,
             y_pred_proba=y_pred_proba,
             class_names=['No Recession', 'Recession'],
-            base_output_dir='experiments',
+            output_dir=output_dir,
+            exp_num=exp_number,
             model_name='XGBoost_example'
         )
 
-        # # save model
-        joblib.dump(final_model, 'xgboost_recession_model.pkl')
+        model_output_path = os.path.join(output_dir, 'xgboost_recession_model.pkl')
+        # save model
+        joblib.dump(final_model, model_output_path)
     elif option == 'predict':
         # Load model
-        final_model = joblib.load('xgboost_recession_model.pkl')
-        show_model_predictions(final_model, X_test, y_test, year_removed=remove_year)
+        output_dir, exp_number = get_experiment_directory(base_output_dir='Experiments', date_str=exp_date, exp_num=exp_number)
+        model_output_path = os.path.join(output_dir, 'xgboost_recession_model.pkl')
+        final_model = joblib.load(model_output_path)
+        show_model_predictions(final_model, X_test, y_test, year_removed=remove_year, output_path=os.path.join(output_dir, 'model_predictions.csv'))
     elif option == 'handpicked':
         # Load model
-        final_model = joblib.load('xgboost_recession_model.pkl')
+        output_dir, exp_number = get_experiment_directory(base_output_dir='Experiments', date_str=exp_date, exp_num=exp_number)
+        model_output_path = os.path.join(output_dir, 'xgboost_recession_model.pkl')
+        final_model = joblib.load(model_output_path)
         handpicked_data = import_data('test_set.csv')
-        test_model_with_handpicked_data(final_model, label_column, feature_columns, handpicked_data)
+        test_model_with_handpicked_data(final_model, label_column, feature_columns, handpicked_data, output_path=os.path.join(output_dir, 'feature_importance.png'))
     elif option == 'feature_importance':
         # Load model
-        final_model = joblib.load('xgboost_recession_model.pkl')
+        output_dir, exp_number = get_experiment_directory(base_output_dir='Experiments', date_str=exp_date, exp_num=exp_number)
+        model_output_path = os.path.join(output_dir, 'xgboost_recession_model.pkl')
+        final_model = joblib.load(model_output_path)
         if remove_year:
             feature_columns.remove('year')
 
         # Show feature importance
-        show_feature_importance(final_model, feature_columns, top_n=20)
+        save_feature_importance(final_model, feature_columns, top_n=20, output_path=os.path.join(output_dir, 'feature_importance.png'))

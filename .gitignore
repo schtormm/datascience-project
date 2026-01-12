@@ -16,6 +16,7 @@ plots_*.png
 
 # ignore experiment folder
 experiments/
+comparisons/
 
 For Friday.txt
 fake_data_plots/
