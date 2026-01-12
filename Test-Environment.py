@@ -121,7 +121,10 @@ def get_predictions(country_dfs, models, forecast_horizon = None, is_exponential
             for model_fit in models_to_evaluate:
                 forecast = model_fit.get_forecast(steps=forecast_horizon)
                 order = model_fit.model.order
-                predictions[country][order] = forecast.predicted_mean
+                predictions[country][order] = {
+                    "forecast": forecast,
+                    "mean": forecast.predicted_mean,
+                }
         else:
             x = test.index.to_numpy()
             predictions[country] = models_to_evaluate.predict(x.reshape(-1, 1))
@@ -144,9 +147,9 @@ def evaluate_models(country_dfs, predictions, used_model = None, output_folder='
             is_dict = True
             for key in predictions_for_country:
                 preds = predictions_for_country[key]
-                mape = mean_absolute_percentage_error(test, preds)
-                mse = mean_squared_error(test, preds)
-                rmse = root_mean_squared_error(test, preds)
+                mape = mean_absolute_percentage_error(test, preds["mean"])
+                mse = mean_squared_error(test, preds["mean"])
+                rmse = root_mean_squared_error(test, preds["mean"])
                 if used_model == 'ARIMA':
                     evaluation_metrics[country].append({'ARIMA Order': key, 'MSE': mse, 'RMSE': rmse, 'MAPE': mape})
                 else:
@@ -227,7 +230,10 @@ def evaluate_models_cross_ARIMA(country_dfs, models, output_folder='experiments'
                     "ARIMA Order": model.model.order,
                     'MSE (mean of all splits)': format(np.mean(mse_list), '.4f'),
                     'RMSE (mean of all splits)': format(np.mean(rmse_list), '.4f'),
-                    'MAPE (mean of all splits)': format(np.mean(mape_list), '.4f')
+                    'MAPE (mean of all splits)': format(np.mean(mape_list), '.4f'),
+                    #format to the same number of decimals
+                    "RMSE (splits)": [format(rmse, '.4f') for rmse in rmse_list],
+                    "MAPE (splits)": [format(mape, '.4f') for mape in mape_list]
                 })
    
     
@@ -236,23 +242,45 @@ def evaluate_models_cross_ARIMA(country_dfs, models, output_folder='experiments'
     return evaluation_metrics_cross
 
 def plot_cross_validation_metrics(evaluations, country_selected, output_folder='experiments'):
-# structure of evaluations: {'NLD': [{'ARIMA Order': (0, 2, 1), 'MSE (mean of all splits)': '5139060320960578.0000', 'RMSE (mean of all splits)': '63190155.9782', 'MAPE (mean of all splits)': '73.4265'}, {'ARIMA Order': (0, 1, 2), 'MSE (mean of all splits)': '9396657797.6879', 'RMSE (mean of all splits)': '88038.7607', 'MAPE (mean of all splits)': '0.0907'}, {'ARIMA Order': (1, 1, 2), 'MSE (mean of all splits)': '534138314185439.1250', 'RMSE (mean of all splits)': '19322941.8541', 'MAPE (mean of all splits)': '22.0743'}, {'ARIMA Order': (1, 1, 1), 'MSE (mean of all splits)': '557582581558194.3125', 'RMSE (mean of all splits)': '18317088.9401', 'MAPE (mean of all splits)': '18.7109'}], 'USA': [{'ARIMA Order': (0, 2, 1), 'MSE (mean of all splits)': '938634279453573760.0000', 'RMSE (mean of all splits)': '905223097.0657', 'MAPE (mean of all splits)': '55.4171'}, {'ARIMA Order': (0, 1, 2), 'MSE (mean of all splits)': '4741184495046.0908', 'RMSE (mean of all splits)': '2040980.7849', 'MAPE (mean of all splits)': '0.1061'}, {'ARIMA Order': (1, 1, 2), 'MSE (mean of all splits)': '277680960530111808.0000', 'RMSE (mean of all splits)': '502324514.9220', 'MAPE (mean of all splits)': '30.4347'}, {'ARIMA Order': (1, 1, 1), 'MSE (mean of all splits)': '283061481707473984.0000', 'RMSE (mean of all splits)': '495424030.9519', 'MAPE (mean of all splits)': '29.1191'}], 'DNK': [{'ARIMA Order': (0, 2, 1), 'MSE (mean of all splits)': '232327943631333.2500', 'RMSE (mean of all splits)': '13074476.2503', 'MAPE (mean of all splits)': '48.8148'}, {'ARIMA Order': (0, 1, 2), 'MSE (mean of all splits)': '1136164800.6028', 'RMSE (mean of all splits)': '31290.1654', 'MAPE (mean of all splits)': '0.0960'}, {'ARIMA Order': (1, 1, 2), 'MSE (mean of all splits)': '37590141818218.3359', 'RMSE (mean of all splits)': '4743567.5512', 'MAPE (mean of all splits)': '15.3009'}, {'ARIMA Order': (1, 1, 1), 'MSE (mean of all splits)': '40975052880050.6328', 'RMSE (mean of all splits)': '4925223.4265', 'MAPE (mean of all splits)': '15.7489'}]}    orders = [model['ARIMA Order'] for model in evaluations[country_selected]]
     orders = [model['ARIMA Order'] for model in evaluations[country_selected]]
-    rmses = [float(model['RMSE (mean of all splits)']) for model in evaluations[country_selected]]
-    mapes = [float(model['MAPE (mean of all splits)']) for model in evaluations[country_selected]]
-    # separate plots for RMSE and MAPE
-    fig, ax = plt.subplots(2, 1, figsize=(10, 10))
-    ax[0].bar([str(order) for order in orders], rmses, color='skyblue')
-    ax[0].set_title(f'Cross-Validation RMSE for {country_selected}')
-    ax[0].set_xlabel('ARIMA Order')
-    ax[0].set_ylabel('RMSE')
-    ax[1].bar([str(order) for order in orders], mapes, color='salmon')
-    ax[1].set_title(f'Cross-Validation MAPE for {country_selected}')
-    ax[1].set_xlabel('ARIMA Order')
-    ax[1].set_ylabel('MAPE')
-    plt.tight_layout()
-    plt.show()
+    # rmse per split
+    rmse_per_split = [list(map(float, model['RMSE (splits)'])) for model in evaluations[country_selected]]
+    # mape * 100 to get actual percentage
+    mape_per_split = [list(map(lambda x: float(x) * 100, model['MAPE (splits)'])) for model in evaluations[country_selected]]
 
+
+    # Plot RMSE per split
+    # 4 plots: 1 per ARIMA order
+    fig, axs = plt.subplots(2, 2, figsize=(12, 8))
+    # scale to 1.2 times the max value for better visibility
+    max_rmse = max([max(rmse_list) for rmse_list in rmse_per_split])
+    axs = axs.flatten()
+    for i, order in enumerate(orders):
+        axs[i].bar(range(1, len(rmse_per_split[i]) + 1), rmse_per_split[i])
+        axs[i].set_title(f'RMSE per Split for ARIMA{order} - {country_selected}')
+        axs[i].set_xlabel('Split Number')
+        axs[i].set_ylabel('RMSE')
+        # turn off scientific notation, with formatter set_scientific(False)
+        axs[i].yaxis.get_major_formatter().set_scientific(False)
+        axs[i].set_ylim(0, max_rmse * 1.2)
+    plt.tight_layout()
+    plt.savefig(f'{output_folder}/rmse_per_split_{country_selected}.png')
+    plt.close()
+
+    # Plot MAPE per split
+    fig, axs = plt.subplots(2, 2, figsize=(12, 8))
+    axs = axs.flatten()
+    max_mape = max([max(mape_list) for mape_list in mape_per_split])
+    for i, order in enumerate(orders):
+        axs[i].bar(range(1, len(mape_per_split[i]) + 1), mape_per_split[i])
+        axs[i].set_title(f'MAPE per Split for ARIMA{order} - {country_selected}')
+        axs[i].set_xlabel('Split Number')
+        axs[i].yaxis.get_major_formatter().set_scientific(False)
+        axs[i].set_ylabel('MAPE')
+        axs[i].set_ylim(0, max_mape * 1.2)
+    plt.tight_layout()
+    plt.savefig(f'{output_folder}/mape_per_split_{country_selected}.png')
+    plt.close()
 
 
 def evaluate_models_cross_linear(country_dfs, models, output_folder='experiments'):
@@ -321,11 +349,15 @@ def create_plots_arima(predictions, country_dfs, timerange, forecast_horizon, ou
         i = 0
         for order in orders:
             # put plot in the figure
-            forecast = predictions[country][order]
+            forecast = predictions[country][order]["forecast"]
+            forecast_mean = predictions[country][order]["mean"]
             forecast_index = np.arange(timerange[1], timerange[1] + forecast_horizon)
             
             # Plot forecast and observed data
-            axs[i].plot(forecast_index, forecast, label=f'Forecast ARIMA{order}', linestyle='--')
+            # 95% confidence intervals
+            conf_int = forecast.conf_int(alpha=0.05)
+            axs[i].fill_between(forecast_index, conf_int.iloc[:, 0], conf_int.iloc[:, 1], color='gray', alpha=0.3, label='95% Confidence Interval')
+            axs[i].plot(forecast_index, forecast_mean, label=f'Forecast ARIMA{order}', linestyle='--')
             
             # Concatenate train and test for continuous line
             observed_data = pd.concat([country_dfs[country]['train'], country_dfs[country]['test']])
@@ -367,9 +399,14 @@ def create_plots_arima(predictions, country_dfs, timerange, forecast_horizon, ou
         
         # Plot all models for this country
         for order in orders:
-            forecast = predictions[country][order]
+            forecast = predictions[country][order]['forecast']
+            forecast_mean = predictions[country][order]['mean']
             forecast_index = np.arange(timerange[1], timerange[1] + forecast_horizon)
-            axs[idx].plot(forecast_index, forecast, 
+
+            # plot forecast and forecast mean
+            conf_int = forecast.conf_int(alpha=0.05)
+            axs[idx].fill_between(forecast_index, conf_int.iloc[:, 0], conf_int.iloc[:, 1], alpha=0.2)
+            axs[idx].plot(forecast_index, forecast_mean, 
                         label=f'Forecast ARIMA{order}', linestyle='--')
         
         # Set x-axis limits and formatting
