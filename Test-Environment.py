@@ -132,7 +132,7 @@ def get_predictions(country_dfs, models, forecast_horizon = None, is_exponential
                 predictions[country] = np.exp(predictions[country])
     return predictions
 
-def evaluate_models(country_dfs, predictions, used_model = None, output_folder='experiments'):
+def evaluate_models(country_dfs, predictions, models, used_model = None, output_folder='experiments'):
     # get MSE, RMSE and MAPE for each model on its test set using crossvalidation
 
     # note for MAPE from sklearn: 
@@ -150,10 +150,16 @@ def evaluate_models(country_dfs, predictions, used_model = None, output_folder='
                 mape = mean_absolute_percentage_error(test, preds["mean"])
                 mse = mean_squared_error(test, preds["mean"])
                 rmse = root_mean_squared_error(test, preds["mean"])
-                if used_model == 'ARIMA':
+                if used_model == 'ARIMA' and models:
+                    # Find the corresponding model to get AIC and BIC
+                    model_fit = next(m for m in models[country] if m.model.order == key)
+                    aic = float(model_fit.aic) #np.float64, convert to 4 decimal places
+                    bic = float(model_fit.bic)
+                    evaluation_metrics[country].append({'ARIMA Order': key, 'MSE': mse, 'RMSE': rmse, 'MAPE': mape, 'AIC': aic, 'BIC': bic})
+                elif used_model == 'ARIMA':
                     evaluation_metrics[country].append({'ARIMA Order': key, 'MSE': mse, 'RMSE': rmse, 'MAPE': mape})
                 else:
-                    evaluation_metrics[country].append({'MSE': mse, 'RMSE': rmse, 'MAPE': mape})
+                    evaluation_metrics[country].append({'MSE': format(mse, '.4f'), 'RMSE': format(rmse, '.4f'), 'MAPE': format(mape, '.4f')})
         else:
             is_dict = False
             mape = mean_absolute_percentage_error(test, predictions_for_country)
@@ -171,7 +177,7 @@ def evaluate_models(country_dfs, predictions, used_model = None, output_folder='
         eval_df = pd.concat([eval_df, mean_row])
     else:
         # Group metrics by ARIMA order
-        metrics_by_order = defaultdict(lambda: {'MSE': [], 'RMSE': [], 'MAPE': []})
+        metrics_by_order = defaultdict(lambda: {'MSE': [], 'RMSE': [], 'MAPE': [], 'AIC': [], 'BIC': []})
 
         for country in evaluation_metrics:
             for model in evaluation_metrics[country]:
@@ -179,19 +185,51 @@ def evaluate_models(country_dfs, predictions, used_model = None, output_folder='
                 metrics_by_order[order]['MSE'].append(model['MSE'])
                 metrics_by_order[order]['RMSE'].append(model['RMSE'])
                 metrics_by_order[order]['MAPE'].append(model['MAPE'])
+                if 'AIC' in model:
+                    metrics_by_order[order]['AIC'].append(model['AIC'])
+                if 'BIC' in model:
+                    metrics_by_order[order]['BIC'].append(model['BIC'])
 
         # Calculate means for each ARIMA order
         mean_metrics = {}
         for order, metrics in metrics_by_order.items():
             mean_metrics[order] = {
-                'MSE': format(np.mean(metrics['MSE']), '.4f'),
-                'RMSE': format(np.mean(metrics['RMSE']), '.4f'),
-                'MAPE': format(np.mean(metrics['MAPE']), '.4f'),
-        }
+                'MSE (mean of all countries)' : format(np.mean(metrics['MSE']), '.4f'),
+                'RMSE (mean of all countries)': format(np.mean(metrics['RMSE']), '.4f'),
+                'MAPE (mean of all countries)': format(np.mean(metrics['MAPE']), '.4f'),
+            }
+            if metrics['AIC']:
+                mean_metrics[order]['AIC (mean of all countries)'] = format(np.mean(metrics['AIC']), '.4f')
+            if metrics['BIC']:
+                mean_metrics[order]['BIC (mean of all countries)'] = format(np.mean(metrics['BIC']), '.4f')
         mean_row = pd.DataFrame([mean_metrics], index=['Mean'])
         eval_df = pd.concat([eval_df, mean_row])
+        # make a nice table of mean metrics for each ARIMA order: per country, and make sure the ARIMA order has "ARIMA order" as column name
+        # include some | formatting for better readability
+        mean_metrics_df = pd.DataFrame.from_dict(mean_metrics, orient='index')
+        mean_metrics_df.index.name = "ARIMA Order"
+        print("Mean metrics for each ARIMA order:")
+        # save print to markdown file
+        with open(f'{output_folder}/mean_metrics_per_arima_order.md', 'w') as f:
+            f.write(mean_metrics_df.to_markdown())
+            f.close()
 
-
+        for country in evaluation_metrics:
+            # format metrics to 4 decimal places
+            metrics = evaluation_metrics[country]
+            
+            for model in metrics:
+                for key in model:
+                    if key != 'ARIMA Order':
+                        model[key] = format(model[key], '.4f')
+            
+                        
+            with open(f'{output_folder}/metrics_per_arima_order_{country}.md', 'w') as f:
+                country_metrics_df = pd.DataFrame(metrics)
+                country_metrics_df = country_metrics_df.set_index('ARIMA Order')
+                f.write(country_metrics_df.to_markdown())
+                f.close()
+    
     eval_df.to_csv(f'{output_folder}/evaluation_metrics.csv')
 
 
@@ -380,6 +418,49 @@ def create_plots_arima(predictions, country_dfs, timerange, forecast_horizon, ou
         print(f"Plots saved for {country}")
         plt.close(fig)
 
+        fig2, axs2 = plt.subplots(num_models, 1, figsize=(10, 5 * num_models))
+
+        if num_models == 1:
+            axs2 = [axs2]
+        
+        # create one plot
+        j = 0 
+        for order in orders:
+            # make sure plot shows test period - 20 years until forecast horizon
+            forecast_mean = predictions[country][order]["mean"]
+            forecast_index = np.arange(timerange[1], timerange[1] + forecast_horizon)
+            start_year = max(timerange[0], timerange[1] - 20)
+            end_year = timerange[1] + forecast_horizon
+            print(f"Start year: {start_year}, End year: {end_year}")
+      
+            # Plot forecast and observed data
+            axs2[j].fill_between(forecast_index, conf_int.iloc[:, 0], conf_int.iloc[:, 1], color='gray', alpha=0.3, label='95% Confidence Interval')
+            axs2[j].plot(forecast_index, forecast_mean, label=f'Forecast ARIMA{order}', linestyle='--')
+            # Concatenate train and test for continuous line
+            observed_data = pd.concat([country_dfs[country]['train'], country_dfs[country]['test']])
+            observed_data.plot(ax=axs2[j], label='Observed Data', color='blue')
+            # Highlight test portion
+            country_dfs[country]['test'].plot(ax=axs2[j], label='Actual Data', color='red', linewidth=2)
+            # Set zoom window
+            observed_subset = observed_data[(observed_data.index >= start_year) & (observed_data.index <= end_year)]
+            axs2[j].set_ylim([observed_subset.min() * 0.95, observed_subset.max() * 1.05])
+            axs2[j].set_xlim([start_year, end_year])
+            # make sure plot only shows from start_year until forecast horizon
+            # get rid of 1e6 notation on y-axis
+            axs2[j].ticklabel_format(style='plain', axis='y')
+            # add title and labels
+            axs2[j].set_title(f'ARIMA{order} Forecast of {parameters["gdp_used"]} rgdpe for {country} (Zoomed In)')
+            axs2[j].set_xlabel('Year')
+            axs2[j].set_ylabel(f'{"log of" if parameters["gdp_used"] == "log" else ""} Real GDP (in millions)')
+            axs2[j].legend()
+            j +=1
+        # Save the plot to a file
+        fig2.savefig(f'{output_folder}/plots_{country}_zoomed.png', dpi=300, bbox_inches='tight')
+        print(f"Zoomed plots saved for {country}")
+        plt.close(fig2)
+        
+
+
     # Plot 2: All countries with all their models
     num_countries = len(predictions.keys())
     fig, axs = plt.subplots(num_countries, 1, figsize=(12, 6 * num_countries))
@@ -527,7 +608,7 @@ if __name__ == "__main__":
             # print(predictions)
             create_plots_arima(predictions, country_dfs, parameters['test_period'], parameters['forecast_horizon'], output_folder=output_folder)
             # grid_search_best_ARIMA(country_dfs)
-            evaluate_models(country_dfs, predictions, 'ARIMA', output_folder=output_folder)
+            evaluate_models(country_dfs, predictions, models=country_models, used_model='ARIMA', output_folder=output_folder)
             evaluations = evaluate_models_cross_ARIMA(country_dfs, country_models, output_folder=output_folder)
             plot_cross_validation_metrics(evaluations, parameters['country_codes'][0], output_folder=output_folder)
             calculate_recession_chances(country_dfs, country_models, output_folder=output_folder)
