@@ -279,6 +279,58 @@ def evaluate_models_cross_ARIMA(country_dfs, models, output_folder='experiments'
     eval_df.to_csv(f'{output_folder}/evaluation_metrics_cross.csv')
     return evaluation_metrics_cross
 
+def diagnostic_analysis_ARIMA(country_dfs, country_models, output_folder='experiments'):
+   # create diagnostics subfolder under output_folder
+    os.makedirs(f'{output_folder}/diagnostics', exist_ok=True)
+    
+    for country, models in country_models.items():
+        for model_fit in models:
+            order = model_fit.model.order
+            
+            # Extract residuals
+            residuals = model_fit.resid
+            
+            # Create diagnostic plots
+            fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+            
+            # 1. Residuals over time
+            axes[0, 0].plot(residuals)
+            axes[0, 0].set_title(f'Residuals - ARIMA{order} - {country}')
+            axes[0, 0].axhline(y=0, linestyle='--', color='red')
+            
+            # 2. QQ-plot
+            qqplot(residuals, line='s', ax=axes[0, 1])
+            axes[0, 1].set_title(f'Q-Q Plot - ARIMA{order} - {country}')
+            
+            # 3. Histogram of residuals
+            axes[1, 0].hist(residuals, bins=20, edgecolor='black')
+            axes[1, 0].set_title(f'Residual Distribution - ARIMA{order} - {country}')
+            
+            # 4. ACF of residuals
+            from statsmodels.graphics.tsaplots import plot_acf
+            plot_acf(residuals, ax=axes[1, 1], lags=20)
+            axes[1, 1].set_title(f'ACF of Residuals - ARIMA{order} - {country}')
+            
+            plt.tight_layout()
+            plt.savefig(f'{output_folder}/diagnostics/diagnostics_{country}_ARIMA{order}.png', dpi=300)
+            plt.close()
+
+            # 5. Ljung-Box test
+            lb_test = sm.stats.acorr_ljungbox(residuals, lags=[10], return_df=True)
+            with open(f'{output_folder}/diagnostics/ljung_box_{country}_ARIMA{order}.txt', 'w') as f:
+                f.write(f"Ljung-Box test results for {country} ARIMA{order}:\n")
+                f.write(lb_test.to_string())
+                f.close()
+            
+            # 6. Shapiro-Wilk test for normality
+            shapiro_test = stats.shapiro(residuals)
+            with open(f'{output_folder}/diagnostics/shapiro_wilk_{country}_ARIMA{order}.txt', 'w') as f:
+                f.write(f"Shapiro-Wilk test results for {country} ARIMA{order}:\n")
+                f.write(f"Statistic: {shapiro_test.statistic}, p-value: {shapiro_test.pvalue}\n")
+                f.close()
+
+            
+
 def plot_cross_validation_metrics(evaluations, country_selected, output_folder='experiments'):
     orders = [model['ARIMA Order'] for model in evaluations[country_selected]]
     # rmse per split
@@ -610,6 +662,7 @@ if __name__ == "__main__":
             # grid_search_best_ARIMA(country_dfs)
             evaluate_models(country_dfs, predictions, models=country_models, used_model='ARIMA', output_folder=output_folder)
             evaluations = evaluate_models_cross_ARIMA(country_dfs, country_models, output_folder=output_folder)
+            diagnostic_analysis_ARIMA(country_dfs, country_models, output_folder=output_folder)
             plot_cross_validation_metrics(evaluations, parameters['country_codes'][0], output_folder=output_folder)
             calculate_recession_chances(country_dfs, country_models, output_folder=output_folder)
         case 'Linear Regression':
