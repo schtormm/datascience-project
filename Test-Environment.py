@@ -557,22 +557,73 @@ def create_plots_arima(predictions, country_dfs, timerange, forecast_horizon, ou
     print("Combined plot saved for all countries: plots_all_countries.png")
     plt.close(fig)    
 
-def calculate_recession_chances(country_dfs, country_models, output_folder='experiments'):
+def calculate_recession_chances(country_dfs, country_models, timerange, forecast_horizon, output_folder='experiments'):
+    os.makedirs(f'{output_folder}/recession-chances', exist_ok=True)
     recession_chances = {}
-    for country, data in country_dfs.items():
-        model_fits = country_models[country]
-        recession_chances[country] = {}
-        for model_fit in model_fits:
-            order = model_fit.model.order
-            # because we said we'd do 5 year forecasts
-            forecast = model_fit.get_forecast(steps=5)
-            forecast_values = forecast.predicted_mean
-            # check for negative pct change
-            recession_prob = np.mean(forecast_values.pct_change().dropna() < 0)
-            recession_chances[country][order] = format(recession_prob, '.4f')
+    # for country, data in country_dfs.items():
+    #     model_fits = country_models[country]
+    #     recession_chances[country] = {}
+    #     for model_fit in model_fits:
+    #         order = model_fit.model.order
+    #         # because we said we'd do 5 year forecasts
+    #         forecast = model_fit.get_forecast(steps=5)
+    #         forecast_values = forecast.predicted_mean
+    #         # check for negative pct change
+    #         recession_prob = np.mean(forecast_values.pct_change().dropna() < 0)
+    #         recession_chances[country][order] = format(recession_prob, '.4f')
+
+    # calulate recession chances based on the best model per country (based on AIC)
+    # create output folder for recesson prediction
     
-    recession_df = pd.DataFrame.from_dict(recession_chances, orient='index')
-    recession_df.to_csv(f'{output_folder}/recession_chances.csv')
+    start_year = timerange[1]       
+    end_year = timerange[1] + forecast_horizon
+
+
+    for country, data in country_dfs.items():
+        recession_chances[country] = []
+        model_fits = country_models[country]
+        for model in model_fits:
+            order = model.model.order
+            print(f"Evaluating ARIMA{order} model for recession chances in {country}")
+            # because we said we'd do 5 year forecasts
+            forecast = model.get_forecast(steps=5)
+            # based on "shape" / slope of the confidence interval, maybe we can determine recession chances?
+            conf_int = forecast.conf_int(alpha=0.05)
+            # get slope of upper bound
+            confidence_upper_bound_slope = (conf_int.iloc[-1, 1] - conf_int.iloc[0, 1]) / 5  # over 5 years
+            # get slope of lower bound
+            confidence_lower_bound_slope = (conf_int.iloc[-1, 0] - conf_int.iloc[0, 0]) / 5  # over 5 years
+            confidence_total_slope = (confidence_upper_bound_slope + confidence_lower_bound_slope) / 2
+            print(f"Confidence interval slopes for ARIMA{order} in {country}: upper={confidence_upper_bound_slope}, lower={confidence_lower_bound_slope}, total={confidence_total_slope}")
+            # if the total slope is negative, we can say there's a high chance of recession
+            # this is needed because confidence_total_slope is float and you cannot do == 0 on floats (at least reliably)
+            if np.isclose(confidence_total_slope, 0):
+                recession_prob = "No recession predicted (total slope is zero)"
+            elif confidence_total_slope < 0:
+                recession_prob = "High chance (predicted shrinkage)"
+            elif confidence_total_slope > 0:
+                recession_prob = "Low chance (predicted growth)"
+            
+            recession_chances[country].append({
+                'ARIMA Order': order,
+                'Slope of Confidence Interval (upper bound)': format(confidence_upper_bound_slope, '.4f'),
+                'Slope of Confidence Interval (lower bound)': format(confidence_lower_bound_slope, '.4f'),
+                'Total Slope of Confidence Interval': format(confidence_total_slope, '.4f'),
+                'Recession Probability': recession_prob
+            })
+
+    for country in recession_chances:
+        recession_df = pd.DataFrame(recession_chances[country])
+        recession_df = recession_df.set_index('ARIMA Order')
+        with open(f'{output_folder}/recession-chances/{country}.md', 'w') as f:
+            # write period of forecast
+            f.write(f"# Recession Chances for {country}\n")
+            f.write(f"## Forecast Period: {start_year} to {end_year}\n\n")
+            f.write(recession_df.to_markdown())
+            f.close()
+            
+
+  
 
 
 def calculate_recession_chances_linear(country_dfs, country_models, output_folder='experiments'):
@@ -664,7 +715,7 @@ if __name__ == "__main__":
             evaluations = evaluate_models_cross_ARIMA(country_dfs, country_models, output_folder=output_folder)
             diagnostic_analysis_ARIMA(country_dfs, country_models, output_folder=output_folder)
             plot_cross_validation_metrics(evaluations, parameters['country_codes'][0], output_folder=output_folder)
-            calculate_recession_chances(country_dfs, country_models, output_folder=output_folder)
+            calculate_recession_chances(country_dfs, country_models, parameters["test_period"], parameters["forecast_horizon"], output_folder=output_folder)
         case 'Linear Regression':
             country_models = create_models_linear(country_dfs, parameters['parameters'])
             predictions = get_predictions(country_dfs, country_models, is_exponential=parameters['parameters']['is_exponential'])
