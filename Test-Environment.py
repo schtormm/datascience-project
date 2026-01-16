@@ -17,6 +17,7 @@ from sklearn.model_selection import GridSearchCV
 from statsmodels.graphics.api import qqplot
 from statsmodels.graphics.tsaplots import plot_predict
 from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 
 dataset = 'cleaned_V11_with_synthetic.csv'
 
@@ -110,6 +111,45 @@ def create_models_linear(country_dfs, parameters):
         linear_model = LinearRegression().fit(X_train, y_train)
         country_models[country] = linear_model
     return country_models
+
+
+def diagnostic_analysis_pre_prediction(country_dfs, gdp_used, output_folder='experiments'):
+   # create diagnostics subfolder under output_folder
+    os.makedirs(f'{output_folder}/diagnostics', exist_ok=True)
+    
+    for country, data in country_dfs.items():
+        # Combine train and test data
+        full_data = data['train']._append(data['test'])
+        
+        # Create diagnostic plots
+        fig, axes = plt.subplots(1, 3, figsize=(12, 4))
+        
+        # 1. Time series plot
+        axes[0].plot(full_data.index, full_data.values)
+        axes[0].set_title(f'Time Series - {country}')
+        axes[0].set_xlabel('Year')
+        axes[0].set_ylabel(f"{'log of Real GDP' if gdp_used == 'log' else 'Real GDP'}")
+        
+        # 2. QQ-plot
+        qqplot(full_data.values, line='s', ax=axes[1])
+        axes[1].set_title(f'Q-Q Plot - {country}')
+        
+        # 3. Histogram
+        axes[2].hist(full_data.values, bins=20, edgecolor='black')
+        axes[2].set_title(f'Distribution - {country}')
+        axes[2].set_xlabel(f"{'log of Real GDP' if gdp_used == 'log' else 'Real GDP'}")
+        axes[2].set_ylabel('Frequency')
+        
+        plt.tight_layout()
+        plt.savefig(f'{output_folder}/diagnostics/raw_data_diagnostics_{country}.png', dpi=300)
+        plt.close()
+        
+        # Shapiro-Wilk test for normality
+        shapiro_test = stats.shapiro(full_data.values)
+        with open(f'{output_folder}/diagnostics/shapiro_wilk_{country}.txt', 'w') as f:
+            f.write(f"Shapiro-Wilk test results for {country}:\n")
+            f.write(f"Statistic: {shapiro_test.statistic}, p-value: {shapiro_test.pvalue}\n")
+            f.close()
 
 def get_predictions(country_dfs, models, forecast_horizon = None, is_exponential = False):
     predictions = {}
@@ -307,7 +347,6 @@ def diagnostic_analysis_ARIMA(country_dfs, country_models, output_folder='experi
             axes[1, 0].set_title(f'Residual Distribution - ARIMA{order} - {country}')
             
             # 4. ACF of residuals
-            from statsmodels.graphics.tsaplots import plot_acf
             plot_acf(residuals, ax=axes[1, 1], lags=20)
             axes[1, 1].set_title(f'ACF of Residuals - ARIMA{order} - {country}')
             
@@ -515,7 +554,7 @@ def create_plots_arima(predictions, country_dfs, timerange, forecast_horizon, ou
 
     # Plot 2: All countries with all their models
     num_countries = len(predictions.keys())
-    fig, axs = plt.subplots(num_countries, 1, figsize=(12, 6 * num_countries))
+    fig, axs = plt.subplots(num_countries, 1, figsize=(12, 6 * num_countries)) 
 
     # Handle case where there's only one country
     if num_countries == 1:
@@ -707,6 +746,7 @@ if __name__ == "__main__":
     match parameters['model']:
         case 'ARIMA':
             country_models = create_models_ARIMA(country_dfs, parameters['parameters'])
+            diagnostic_analysis_pre_prediction(country_dfs, output_folder=output_folder)
             predictions = get_predictions(country_dfs, country_models, forecast_horizon=parameters['forecast_horizon'])
             # print(predictions)
             create_plots_arima(predictions, country_dfs, parameters['test_period'], parameters['forecast_horizon'], output_folder=output_folder)
@@ -725,8 +765,7 @@ if __name__ == "__main__":
             calculate_recession_chances_linear(country_dfs, country_models, output_folder=output_folder)
         case _:
             raise ValueError(f"Model {parameters['model']} not recognized.")
-    
-    
 
 
- 
+
+
