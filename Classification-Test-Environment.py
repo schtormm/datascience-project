@@ -46,7 +46,7 @@ def time_split_by_year(df, feature_cols, target_col='recession_next_year',
     y_train = train_df[target_col]
 
     # Test set
-    test_df = df[df['year'] > test_end]
+    test_df = df[(df['year'] > train_end) & (df['year'] < test_end)]
     X_test = test_df[feature_cols]
     y_test = test_df[target_col]
 
@@ -355,7 +355,7 @@ def tune_xgboost(X_train, y_train, task='classification', search_method='grid',
         else:
             scale_pos_weight = None
 
-        base_model = XGBClassifier(random_state=random_state, eval_metric='aucpr', scale_pos_weight=scale_pos_weight, n_estimators=1500)
+        base_model = XGBClassifier(random_state=random_state, scale_pos_weight=scale_pos_weight, n_estimators=1500)
         if scoring is None:
             scoring = 'average_precision'
     elif task == 'regression':
@@ -428,8 +428,6 @@ def tune_xgboost(X_train, y_train, task='classification', search_method='grid',
 def save_feature_importance(model, feature_names, top_n=20, output_path='feature_importance.png'):
     """Display the top N feature importances from the model."""
     importances = model.feature_importances_
-    print(importances)
-    print(feature_names)
     feature_importance_df = pd.DataFrame({
         'feature': feature_names,
         'importance': importances
@@ -482,8 +480,8 @@ def test_model_with_handpicked_data(model, label_column, feature_columns, handpi
 
 if __name__ == "__main__":
     data = import_data('engineered_features_all_countries.csv')
-    feature_columns = [col for col in data.columns if col not in ['countrycode', 'years_since_start', 'recession', 'recession_last_year', 'recession_next_year']]
-    label_column = 'recession_next_year'
+    feature_columns = [col for col in data.columns if col not in ['countrycode', 'years_since_start', 'recession', 'recession_last_year', 'recession_in_1y', 'recession_in_2y', 'recession_in_3y', 'recession_in_5y', 'recession_in_10y']]
+    label_column = 'recession_in_10y'
     remove_year = True
 
     param_grid = {
@@ -517,8 +515,8 @@ if __name__ == "__main__":
             data,
             feature_cols=feature_columns,
             target_col='recession_next_year',
-            train_end=2000,
-            test_end=2010,
+            train_end=2015,
+            test_end=2030,
             remove_year=remove_year,
         )
     
@@ -530,7 +528,7 @@ if __name__ == "__main__":
             search_method='random',
             n_iter=10,
             scoring=average_precision_score,
-            cv=1,
+            cv=2,
         )
 
         best_params = results['best_params']
@@ -588,8 +586,6 @@ if __name__ == "__main__":
         output_dir, exp_number = get_experiment_directory(base_output_dir='Experiments', date_str=exp_date, exp_num=exp_number)
         model_output_path = os.path.join(output_dir, 'xgboost_recession_model.pkl')
         final_model = joblib.load(model_output_path)
-        if remove_year:
-            feature_columns.remove('year')
 
         # Show feature importance
         save_feature_importance(final_model, feature_columns, top_n=20, output_path=os.path.join(output_dir, 'feature_importance.png'))

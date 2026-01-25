@@ -1,5 +1,6 @@
 from matplotlib import pyplot as plt
 import pandas as pd
+import seaborn as sns
 import os
 from datetime import datetime
 
@@ -130,7 +131,7 @@ def calculate_roc_from_predictions(predictions_df, positive_class='Recession'):
     return fpr, tpr, roc_auc
 
 def plot_multiple_roc_curves_from_files(json_files, predictions_files, model_names=None, 
-                                        title='ROC Curves Comparison', figsize=(10, 8),
+                                        title=None, figsize=(10, 8),
                                         positive_class='Recession', comparison_dir=None):
     """Plot ROC curves for multiple models using separate JSON and predictions files.
     
@@ -205,13 +206,16 @@ def plot_multiple_roc_curves_from_files(json_files, predictions_files, model_nam
     # Plot diagonal line (random classifier)
     ax.plot([0, 1], [0, 1], 'k--', lw=1, label='Random Classifier (AUC = 0.500)')
     
+
+    title_text = 'ROC Curves Comparison: ' + title if title else 'ROC Curves Comparison'
+
     # Configure plot
     ax.set_xlim([0.0, 1.0])
     ax.set_ylim([0.0, 1.05])
     ax.set_xlabel('False Positive Rate', fontsize=12)
     ax.set_ylabel('True Positive Rate', fontsize=12)
-    ax.set_title(title, fontsize=14, fontweight='bold')
-    ax.legend(loc="lower right", fontsize=10)
+    ax.set_title(title_text, fontsize=14, fontweight='bold')
+    ax.legend(loc="lower right", fontsize=14)
     ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
@@ -227,7 +231,7 @@ def plot_multiple_roc_curves_from_files(json_files, predictions_files, model_nam
     
     return fig, ax
 
-def plot_bar_comparison(comparison_df, model_names, metric_column='Metric', figsize=(10, 6), comparison_dir=None):
+def plot_bar_comparison(comparison_df, model_names, metric_column='Metric', figsize=(10, 6), comparison_dir=None, title=None):
     """Plot bar comparison of model metrics.
     
     Args:
@@ -236,6 +240,7 @@ def plot_bar_comparison(comparison_df, model_names, metric_column='Metric', figs
         metric_column: Name of the column containing metric names
         save_path: Optional path to save the figure. If None, displays the plot.
         figsize: Tuple for figure size (width, height)
+        title: Title for the plot
     Returns:
         matplotlib figure and axis objects
     """
@@ -246,17 +251,24 @@ def plot_bar_comparison(comparison_df, model_names, metric_column='Metric', figs
     bar_width = 0.15
     indices = range(len(comparison_df))
     
+    # Plot bars for each model with text labels
     for i, model_name in enumerate(model_names):
         values = comparison_df[model_name].values
         bar_positions = [index + i * bar_width for index in indices]
         ax.bar(bar_positions, values, width=bar_width, label=model_name)
+        # Add value labels on top of bars
+        for x, y in zip(bar_positions, values):
+            ax.text(x, y + 0.01, f'{y:.2f}', ha='center', va='bottom', fontsize=8)
+
+    title_text = 'Model Performance Comparison: ' + title if title else 'Model Performance Comparison'
 
     # Configure plot
     ax.set_xlabel('Metrics', fontsize=12)
     ax.set_ylabel('Values', fontsize=12)
-    ax.set_title('Model Performance Comparison', fontsize=14, fontweight='bold')
+    ax.set_title(title_text, fontsize=14, fontweight='bold')
     ax.set_xticks([index + bar_width * (len(model_names) - 1) / 2 for index in indices])
     ax.set_xticklabels(comparison_df[metric_column], rotation=45, ha='right')
+    ax.set_ylim(0, 1)
     ax.legend(loc='best', fontsize=10)
     ax.grid(axis='y', alpha=0.3)
 
@@ -272,6 +284,58 @@ def plot_bar_comparison(comparison_df, model_names, metric_column='Metric', figs
         plt.show()
 
     return fig, ax
+
+def plot_confusion_matrixes(json_files, labels=['No Recession', 'Recession'], model_names=None,
+                           title=None, figsize=(12, 8), comparison_dir=None):
+    """Plot confusion matrices for multiple models using separate JSON and predictions files.
+    
+    Args:
+        json_files: List of paths to JSON files containing metrics
+        labels: List of labels for the confusion matrix (default: ['No Recession', 'Recession'])
+        model_names: List of names for the models. If None, uses 'Model 1', 'Model 2', etc.
+        title: Title for the plot
+        figsize: Tuple for figure size (width, height)
+        comparison_dir: Optional directory to save the figure. If None, displays the plot.
+    Returns:
+        matplotlib figure and axis objects
+    """   
+    # Generate default model names if not provided
+    if model_names is None:
+        model_names = [f'Model {i+1}' for i in range(len(json_files))]
+    # Ensure we have the right number of names
+    if len(model_names) != len(json_files):
+        raise ValueError("Number of model names must match number of files")
+    # Create figure
+    num_models = len(json_files)
+    fig, axes = plt.subplots(1, num_models, figsize=figsize)
+    # Plot confusion matrix for each model
+    for i, (json_file, model_name) in enumerate(zip(json_files, model_names)):
+        # Load metrics from JSON
+        metrics = get_results_from_file(json_file)
+        if 'confusion_matrix' not in metrics:
+            print(f"Confusion matrix not found in {json_file}, skipping.")
+            continue
+        cm = metrics['confusion_matrix']
+        cm_df = pd.DataFrame(cm, index=labels, columns=labels)
+        # Plot heatmap
+        sns.heatmap(cm_df, annot=True, fmt='d', cmap='Blues', ax=axes[i])
+        axes[i].set_title(model_name, fontsize=12)
+        axes[i].set_xlabel('Predicted Label', fontsize=10)
+        axes[i].set_ylabel('True Label', fontsize=10)
+        
+    title_text = 'Confusion Matrices Comparison: ' + title if title else 'Confusion Matrices Comparison'
+    plt.suptitle(title_text, fontsize=16, fontweight='bold')
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+    # Save or show the plot
+    if comparison_dir:
+        os.makedirs(comparison_dir, exist_ok=True)
+        save_path = os.path.join(comparison_dir, 'confusion_matrices.png')
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Confusion matrices plot saved to {save_path}")
+    else:
+        plt.show()
+    return fig, axes
 
 def create_comparison_directory(base_output_dir='Comparisons'):
     """Create a comparison directory with current date and next available experiment number."""
@@ -292,8 +356,11 @@ def create_comparison_directory(base_output_dir='Comparisons'):
 if __name__ == "__main__":
     # Example usage
     base_output_dir = 'Experiments'
-    experiments = [['2026-01-12', 3], ['2026-01-12', 4], ['2026-01-12', 6]]
-    model_names = ['Developed Countries', 'Developing Countries', 'Least Developed Countries']
+    experiments = [['2026-01-25', 5], ['2026-01-25', 8], ['2026-01-25', 6], ['2026-01-25', 7], ['2026-01-25', 9]]
+    model_names = ['Recession in 1 year', 'Recession in 2 years', 'Recession in 3 years', 'Recession in 5 years', 'Recession in 10 years']
+    metrics = ['f1_score', 'roc_auc', 'avg_precision']
+    all_metrics = ['accuracy', 'precision', 'recall', 'f1_score', 'roc_auc', 'avg_precision']
+    name_comparison = 'Forecast horizon change: 1 vs 2 vs 3 vs 5 vs 10 years'
 
 
     json_files = get_file_locations(base_output_dir, experiments, file_extension='.json')
@@ -302,12 +369,18 @@ if __name__ == "__main__":
     comparison_dir = create_comparison_directory(base_output_dir='Comparisons')
 
     model_results = [get_results_from_file(f) for f in json_files]
-    comparison_df = compare_model_performance(model_results, model_names=model_names, comparison_dir=comparison_dir)
+    comparison_df = compare_model_performance(model_results, metrics=metrics, model_names=model_names, comparison_dir=comparison_dir)
     print(comparison_df)
 
     # Plot ROC curves
-    plot_multiple_roc_curves_from_files(json_files, results_files, model_names=model_names, comparison_dir=comparison_dir)
+    plot_multiple_roc_curves_from_files(json_files, results_files, model_names=model_names, comparison_dir=comparison_dir, title=name_comparison)
 
     # Plot bar comparison
-    plot_bar_comparison(comparison_df, model_names=model_names, comparison_dir=comparison_dir)
+    plot_bar_comparison(comparison_df, model_names=model_names, comparison_dir=comparison_dir, title=name_comparison)
+
+    # Plot confusion matrices
+    plot_confusion_matrixes(json_files, model_names=model_names, comparison_dir=comparison_dir, title=name_comparison)
+
+    # Save full comparison with all metrics
+    full_comparison_df = compare_model_performance(model_results, metrics=all_metrics, model_names=model_names, comparison_dir=comparison_dir)
 

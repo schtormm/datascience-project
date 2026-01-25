@@ -12,7 +12,7 @@ def load_data(file_path, columns, countries=None, min_history=12, status=None):
     
     if status is not None:
         status_df = pd.read_csv('all_countries.csv')
-        filtered_countries = status_df[status_df['status'].isin(status)]['country_code'].tolist()
+        filtered_countries = status_df[status_df['status'].isin(status)]['countrycode'].tolist()
         df = df[df['countrycode'].isin(filtered_countries)].reset_index(drop=True)
 
     df = df[['countrycode', 'year'] + columns]
@@ -96,18 +96,60 @@ def create_all_features(df, base_vars=['gdp','avg_hours','hc'], remove_originals
     print(f"Total columns: {len(df.columns)}")
     return df
 
-def add_recession_classification(df, recessions=None, use_file=False):
+def add_status_one_hot(df, status_file='all_countries.csv', drop_original=True):
+    """
+    Merge country status and add one-hot encoded status features.
+    """
+    status_df = pd.read_csv(status_file)
+    status_df = status_df[['countrycode', 'status']]
+
+    # Merge into main dataframe
+    df = df.merge(status_df, on='countrycode', how='left')
+
+    # One-hot encode status
+    status_dummies = pd.get_dummies(df['status'], prefix='status')
+
+    # Add to dataframe
+    df = pd.concat([df, status_dummies], axis=1)
+
+    # Optionally drop original categorical column
+    if drop_original:
+        df = df.drop(columns=['status'])
+
+    return df
+
+
+def add_recession_classification(df, recessions=None, use_file=False, future_windows=[1, 2, 3, 5, 10]):
     if use_file and recessions is not None:
         recession_df = pd.read_csv(recessions)
         recession_df = recession_df[['year','country_code']]
         recession_df['recession'] = 1
         df = df.merge(recession_df, left_on=['year','countrycode'], right_on=['year','country_code'], how='left')
         df['recession'] = df['recession'].fillna(0).astype(int)
-        df = df.drop(columns=['country_code'])
     else:
         df['recession'] = (df['rgdpe_pct_change_1y'] < 0).astype(int)
     df['recession_last_year'] = df['recession'].shift(1).fillna(0).astype(int)
-    df['recession_next_year'] = df['recession'].shift(-1).fillna(0).astype(int)
+
+    df = add_future_recession_window(df, windows=future_windows)
+
+    return df
+
+def add_future_recession_window(df, windows=[1, 2, 3, 5, 10]):
+    """
+    Adds features like:
+    recession_in_3y = 1 if recession occurs in next 3 years, else 0
+    """
+    df = df.sort_values(['countrycode', 'year']).copy()
+
+    for w in windows:
+        col_name = f'recession_in_{w}y'
+        df[col_name] = (
+            df.groupby('countrycode')['recession']
+              .transform(lambda x: x.shift(-1).rolling(w, min_periods=1).max())
+              .fillna(0)
+              .astype(int)
+        )
+
     return df
 
 def get_feature_columns(df, exclude_cols=['countrycode','year','recession']):
@@ -156,14 +198,16 @@ if __name__ == "__main__":
     recession_file = 'recessions.csv'  # Path to recession data file if used
     
     # Load data with minimum history enforced
-    df = load_data('cleaned_V11.csv', countries=countries_to_use, columns=columns_to_use, min_history=12, status=['Least Developed'])
+    df = load_data('cleaned_V11.csv', countries=countries_to_use, columns=columns_to_use, min_history=12, status=['Developed', 'Developing', 'Least Developed'])
     
     # Create features
-    df_features = create_all_features(df, base_vars=columns_to_use, remove_originals=True)
+    df_features = create_all_features(df, base_vars=columns_to_use, remove_originals=False)
     
     # Get feature columns
-    feature_cols = get_feature_columns(df_features, exclude_cols=['countrycode', 'year', 'years_since_start', 'recession_next_year', 'recession', 'recession_last_year'])
+    feature_cols = get_feature_columns(df_features, exclude_cols=['countrycode', 'year', 'years_since_start', 'recession_next_year', 'recession', 'recession_last_year', 'recession_in_1y', 'recession_in_2y', 'recession_in_3y', 'recession_in_5y', 'recession_in_10y'])
 
+    df_features = add_status_one_hot(df_features, status_file='all_countries.csv')
+    
     # Handle missing data
     df_features = handle_missing_data(df_features, feature_cols)
     
@@ -199,7 +243,7 @@ if __name__ == "__main__":
         # Create features
         df_recession_features = create_all_features(df_recession, 
                                                     base_vars=columns_to_use, 
-                                                    remove_originals=True, 
+                                                    remove_originals=False, 
                                                     recessions=recession_file, 
                                                     use_recession_file=True)
         
